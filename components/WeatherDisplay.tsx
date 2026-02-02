@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { WeatherType, WeatherType as WT } from '../types';
 import { WEATHER_EFFECTS } from '../constants';
-import { CloudRain, Sun, Flame, Cloud, Zap, Sparkles, Rainbow, Star, Wind, Haze, Snowflake, Moon, Tornado, Rocket, Mountain, FlaskConical, CloudHail } from 'lucide-react';
+import { CloudRain, Sun, Flame, Cloud, Zap, Sparkles, Rainbow, Star, Wind, Haze, Snowflake, Moon, Tornado, Rocket, Mountain, FlaskConical, CloudHail, AlertTriangle } from 'lucide-react';
 
 interface WeatherDisplayProps {
   weather: WeatherType;
@@ -9,6 +10,16 @@ interface WeatherDisplayProps {
 
 const WeatherDisplay: React.FC<WeatherDisplayProps> = ({ weather }) => {
   const info = WEATHER_EFFECTS[weather];
+
+  // Safety Fallback: If weather ID is invalid/corrupt
+  if (!info) {
+      return (
+        <div className="bg-red-100 px-4 py-2 rounded-2xl flex items-center gap-2 border border-red-200">
+            <AlertTriangle className="w-5 h-5 text-red-500" />
+            <span className="text-xs text-red-700 font-bold">Lỗi Thời Tiết</span>
+        </div>
+      );
+  }
 
   const Icon = {
     'Sunny': Sun,
@@ -30,7 +41,7 @@ const WeatherDisplay: React.FC<WeatherDisplayProps> = ({ weather }) => {
     'Drought': Flame,
     'Blizzard': Snowflake,
     'Hailstorm': CloudHail
-  }[weather];
+  }[weather] || Sun; // Default to Sun if icon missing
 
   // Adjust text colors for Dark backgrounds
   const isDarkMode = ['DiamondSky', 'Eclipse', 'MeteorShower', 'Aurora', 'Blizzard'].includes(weather);
@@ -108,7 +119,7 @@ const WeatherDisplay: React.FC<WeatherDisplayProps> = ({ weather }) => {
              </div>
         )}
 
-        {/* Fog Effect */}
+        {/* Fog Effect (Fixed Animation) */}
         {weather === 'Foggy' && (
              <div className="absolute inset-0 pointer-events-none z-0 opacity-50 overflow-hidden">
                 <div className="absolute w-[200%] h-full bg-gradient-to-r from-transparent via-white to-transparent"

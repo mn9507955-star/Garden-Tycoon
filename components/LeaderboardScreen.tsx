@@ -1,6 +1,6 @@
 
 import React, { useMemo } from 'react';
-import { ArrowLeft, Trophy, Coins, Crown, Medal, User } from 'lucide-react';
+import { ArrowLeft, Trophy, Coins, Crown, Medal, User, ShieldCheck } from 'lucide-react';
 import { Rival } from '../types';
 
 interface PlayerStats {
@@ -27,8 +27,15 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentPlayer, ri
         level: r.level
     }));
 
+    // Add Admin user (Always Top 1)
+    const adminUser: PlayerStats = {
+        name: "ADMIN MINH3312",
+        money: 999999999999, // Infinite money basically
+        level: 9999
+    };
+
     // Add current user
-    const allPlayers = [...rivalStats, { ...currentPlayer, isUser: true }];
+    const allPlayers = [...rivalStats, { ...currentPlayer, isUser: true }, adminUser];
 
     // Sort by money descending
     return allPlayers.sort((a, b) => b.money - a.money);
@@ -76,6 +83,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentPlayer, ri
                   {leaderboardData.slice(0, 100).map((player, index) => { // Limit display to top 100
                       const rank = index + 1;
                       const isUser = player.isUser;
+                      const isAdmin = player.name === "ADMIN MINH3312";
                       
                       return (
                           <div 
@@ -84,7 +92,9 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentPlayer, ri
                                   flex items-center gap-4 p-4 rounded-3xl border-2 transition-all duration-300
                                   ${isUser 
                                       ? 'bg-indigo-50 border-indigo-500 shadow-lg scale-[1.02] z-10' 
-                                      : 'bg-white border-transparent hover:border-slate-200 hover:shadow-md'
+                                      : isAdmin
+                                        ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-500 shadow-xl scale-[1.03] z-20'
+                                        : 'bg-white border-transparent hover:border-slate-200 hover:shadow-md'
                                   }
                               `}
                           >
@@ -96,23 +106,28 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentPlayer, ri
                               {/* Avatar */}
                               <div className={`
                                   relative w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm text-xl
-                                  ${isUser ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-500'}
+                                  ${isUser 
+                                      ? 'bg-indigo-500 text-white' 
+                                      : isAdmin
+                                        ? 'bg-red-500 text-white'
+                                        : 'bg-slate-100 text-slate-500'
+                                  }
                               `}>
-                                  {isUser ? <User className="w-6 h-6" /> : player.name.charAt(0)}
+                                  {isUser ? <User className="w-6 h-6" /> : isAdmin ? <ShieldCheck className="w-6 h-6"/> : player.name.charAt(0)}
                                   
                                   {/* Fake Online Indicator for some rivals */}
-                                  {!isUser && Math.random() > 0.7 && (
+                                  {(!isUser && (isAdmin || Math.random() > 0.7)) && (
                                      <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse"></div>
                                   )}
                               </div>
 
                               {/* Info */}
                               <div className="flex-1 min-w-0">
-                                  <div className={`font-black truncate ${isUser ? 'text-indigo-700' : 'text-slate-700'}`}>
-                                      {player.name} {isUser && '(Bạn)'}
+                                  <div className={`font-black truncate ${isUser ? 'text-indigo-700' : isAdmin ? 'text-red-600' : 'text-slate-700'}`}>
+                                      {player.name} {isUser && '(Bạn)'} {isAdmin && '(DEV)'}
                                   </div>
                                   <div className="flex items-center gap-2 mt-1">
-                                      <div className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                                      <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAdmin ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-slate-400'}`}>
                                           Level {player.level}
                                       </div>
                                   </div>
@@ -120,9 +135,9 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentPlayer, ri
 
                               {/* Money */}
                               <div className="text-right">
-                                  <div className="font-black text-green-600 flex items-center justify-end gap-1">
-                                      <Coins className="w-4 h-4 fill-green-600" />
-                                      ${player.money.toLocaleString()}
+                                  <div className={`font-black flex items-center justify-end gap-1 ${isAdmin ? 'text-orange-500' : 'text-green-600'}`}>
+                                      <Coins className={`w-4 h-4 ${isAdmin ? 'fill-orange-500' : 'fill-green-600'}`} />
+                                      {isAdmin ? 'VÔ CỰC' : `$${player.money.toLocaleString()}`}
                                   </div>
                               </div>
                           </div>

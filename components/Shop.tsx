@@ -44,8 +44,8 @@ const Shop: React.FC<ShopProps> = ({
 
   return (
     <div className="bg-white/60 backdrop-blur-xl xl:rounded-[2rem] flex flex-col h-full shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] border border-white/60 overflow-hidden ring-1 ring-white/80">
-      {/* Header */}
-      <div className="p-5 border-b border-white/20 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
+      {/* Header with right padding for mobile Close button */}
+      <div className="p-5 pr-14 md:pr-5 border-b border-white/20 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
         <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
             <span className="text-2xl drop-shadow-md">🏪</span> 
@@ -193,10 +193,13 @@ const Shop: React.FC<ShopProps> = ({
                 })}
                 
                 {filteredPlants.length === 0 && (
-                    <div className="col-span-2 text-center text-slate-400 text-xs py-10 italic">
-                        Kho hạt giống đang tạm hết hàng loại này.
-                        <br/>
-                        Vui lòng chờ đợt hàng sau!
+                    <div className="col-span-2 flex flex-col items-center justify-center text-center py-12 text-slate-400">
+                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                            <Box className="w-8 h-8 opacity-50" />
+                        </div>
+                        <p className="text-xs italic max-w-[200px]">
+                            Đợt hàng này không có loại hạt giống bạn cần. Vui lòng quay lại sau!
+                        </p>
                     </div>
                 )}
             </div>

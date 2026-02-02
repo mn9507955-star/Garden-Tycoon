@@ -139,27 +139,48 @@ const App: React.FC = () => {
       localStorage.setItem(RIVALS_SAVE_KEY, JSON.stringify(newRivals));
   };
 
-  // --- SHOP REFRESH LOGIC ---
+  // --- SHOP REFRESH LOGIC (BALANCED) ---
   const refreshShopStock = () => {
       const allPlants = Object.values(PLANTS);
       const allItems = Object.values(ITEMS);
       const selectedStock: Record<string, number> = {};
       
-      // Always guarantee wheat
-      selectedStock['wheat'] = Math.floor(Math.random() * 11) + 5; 
+      // 1. Always guarantee Wheat (Basic)
+      selectedStock['wheat'] = Math.floor(Math.random() * 11) + 10; 
       
+      // 2. Balanced Random Selection (6 slots)
       for(let i=0; i<6; i++) {
           const rand = Math.random();
           let pool = allPlants;
-          if (rand < 0.5) pool = allPlants.filter(p => p.rarity === 'Common');
-          else if (rand < 0.8) pool = allPlants.filter(p => p.rarity === 'Rare');
+
+          // Adjusted probability tiers
+          if (rand < 0.5) {
+              // 50% Common
+              pool = allPlants.filter(p => p.rarity === 'Common');
+          } else if (rand < 0.8) {
+              // 30% Rare
+              pool = allPlants.filter(p => p.rarity === 'Rare');
+          } else if (rand < 0.95) {
+              // 15% Epic/Legendary
+              pool = allPlants.filter(p => ['Epic', 'Legendary'].includes(p.rarity));
+          } else {
+              // 5% Mythical/Celestial/Cyber
+              pool = allPlants.filter(p => ['Mythical', 'Cyber', 'Celestial'].includes(p.rarity));
+          }
           
+          // Fallback if pool empty (e.g., no Mythical plants defined yet)
+          if (pool.length === 0) pool = allPlants;
+
           if(pool.length > 0) {
               const pick = pool[Math.floor(Math.random() * pool.length)];
-              selectedStock[pick.id] = (selectedStock[pick.id] || 0) + Math.floor(Math.random() * 5) + 1;
+              // Don't overwrite if already selected, just add stock
+              selectedStock[pick.id] = (selectedStock[pick.id] || 0) + Math.floor(Math.random() * 5) + 3;
           }
       }
+      
+      // 3. Always stock Items
       allItems.forEach(item => selectedStock[item.id] = Math.floor(Math.random() * 3) + 1);
+      
       setShopStock(selectedStock);
       setShopNextRefresh(Date.now() + SHOP_REFRESH_RATE);
   };
@@ -198,12 +219,25 @@ const App: React.FC = () => {
                    setGrid(loadedGrid);
               }
               
-              // Load Timers
+              // Load Timers & Shop
               setPetCooldownTimer(savedData.petCooldownTimer || 0);
               setPetActiveTimer(savedData.petActiveTimer || 0);
               setLastLoginDate(savedData.lastLoginDate || 0);
               setConsecutiveDays(savedData.consecutiveDays || 1);
               setLastClaimedDate(savedData.lastClaimedDate || 0);
+              setSprinklerEndTime(savedData.sprinklerEndTime || 0);
+              
+              // CRITICAL FIX: Restore Shop State
+              const savedStock = savedData.shopStock || { 'wheat': 10 };
+              const savedRefresh = savedData.shopNextRefresh || Date.now();
+              setShopStock(savedStock);
+              setShopNextRefresh(savedRefresh);
+              
+              // Auto refresh if time passed while offline
+              if (savedRefresh < Date.now()) {
+                  refreshShopStock();
+              }
+
           } else {
               refreshShopStock();
           }
@@ -221,7 +255,7 @@ const App: React.FC = () => {
             const stateToSave = {
                 playerName, money, level, xp, inventory, grid, weather,
                 ownedPets, equippedPet, petCooldownTimer, petActiveTimer,
-                shopStock, shopNextRefresh, lastLoginDate, consecutiveDays, lastClaimedDate,
+                shopStock, shopNextRefresh, lastLoginDate, consecutiveDays, lastClaimedDate, sprinklerEndTime,
                 version: SAVE_VERSION
             };
             localStorage.setItem(SAVE_KEY, JSON.stringify(stateToSave));
@@ -229,7 +263,7 @@ const App: React.FC = () => {
             console.warn("Failed to save game data (probably quota exceeded)", e);
         }
     }
-  }, [money, grid, inventory, equippedPet, petCooldownTimer, petActiveTimer, weather, shopStock, playerName, inMenu, isLoading]);
+  }, [money, grid, inventory, equippedPet, petCooldownTimer, petActiveTimer, weather, shopStock, playerName, inMenu, isLoading, sprinklerEndTime]);
 
   // --- GAME LOOP ---
   useEffect(() => {
@@ -242,6 +276,27 @@ const App: React.FC = () => {
               if (prev <= 1) { setWeather('Sunny'); return 0; }
               return prev - 1;
           });
+      } else {
+         // Random Natural Weather Event (Small chance if Sunny)
+         if (Math.random() < 0.005) { // 0.5% per second (~once every 3 mins)
+             const candidates = (Object.keys(WEATHER_EFFECTS) as WeatherType[]).filter(w => w !== 'Sunny');
+             
+             // Weighted random
+             let totalWeight = 0;
+             candidates.forEach(w => totalWeight += WEATHER_EFFECTS[w].weight);
+             let random = Math.random() * totalWeight;
+             
+             for (const w of candidates) {
+                 random -= WEATHER_EFFECTS[w].weight;
+                 if (random <= 0) {
+                     setWeather(w);
+                     const duration = Math.floor(Math.random() * 60) + 30; // 30-90 seconds
+                     setWeatherTimeLeft(duration); 
+                     showToast(`Dự báo thời tiết: ${WEATHER_EFFECTS[w].desc}!`);
+                     break;
+                 }
+             }
+         }
       }
 
       // 2. Pet Timers
@@ -261,8 +316,13 @@ const App: React.FC = () => {
 
       // 4. Sprinkler Logic
       const isSprinklerActive = Date.now() < sprinklerEndTime;
+      
+      // 5. Shop Auto Refresh Logic
+      if (Date.now() >= shopNextRefresh) {
+          refreshShopStock();
+      }
 
-      // 5. Grid Updates
+      // 6. Grid Updates
       setGrid(prevGrid => prevGrid.map(cell => {
           if (!cell.plantId) return cell;
           if (cell.isDead) return cell;
@@ -277,7 +337,10 @@ const App: React.FC = () => {
           const variantInfo = VARIANTS[cell.variant];
 
           // Water Logic
-          let waterChange = -plant.waterConsumption * weatherInfo.waterMod;
+          // Safety: Check if weatherInfo exists before accessing properties
+          const waterMod = weatherInfo ? weatherInfo.waterMod : 1;
+          let waterChange = -plant.waterConsumption * waterMod;
+          
           if (isSprinklerActive) waterChange += 5; 
           
           let newWater = Math.max(0, Math.min(100, cell.waterLevel + waterChange));
@@ -292,7 +355,8 @@ const App: React.FC = () => {
              // Modifiers
              if (newWater > 80) growthSpeed *= 1.2; // Well watered
              if (newWater < 30) growthSpeed *= 0.5; // Thirsty
-             growthSpeed *= weatherInfo.growthMod;
+             
+             if (weatherInfo) growthSpeed *= weatherInfo.growthMod;
              growthSpeed *= variantInfo.multiplier; 
              
              // Pet Growth Ability
@@ -313,7 +377,7 @@ const App: React.FC = () => {
     }, TICK_RATE);
 
     return () => clearInterval(tick);
-  }, [inMenu, isLoading, weather, petActiveTimer, equippedPet, sprinklerEndTime]);
+  }, [inMenu, isLoading, weather, petActiveTimer, equippedPet, sprinklerEndTime, shopNextRefresh]);
 
   // --- HANDLERS ---
   const handleCellClick = (id: number) => {
@@ -391,7 +455,7 @@ const App: React.FC = () => {
                 
                 // Check weather specific variants first
                 const weatherInfo = WEATHER_EFFECTS[weather];
-                if (weatherInfo.specialVariant && Math.random() < (weatherInfo.specialVariantChance || 0)) {
+                if (weatherInfo && weatherInfo.specialVariant && Math.random() < (weatherInfo.specialVariantChance || 0)) {
                     chosenVariant = weatherInfo.specialVariant;
                 } else {
                     // Standard luck
@@ -643,10 +707,14 @@ const App: React.FC = () => {
       )}
 
       {/* INVENTORY DRAWER */}
+      {/* 
+          CRITICAL FIX: Changed z-50 to z-[90] to ensure it overlays the Bottom Bar (z-40), Shop (z-50) and Assistant (z-50).
+          Also changed inset-y-0 to h-[100dvh] for mobile browser address bar safety.
+      */}
       {isInventoryOpen && (
-          <div className="fixed inset-0 z-50">
+          <div className="fixed inset-0 z-[90]">
               <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={() => setIsInventoryOpen(false)} />
-              <div className="absolute inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col z-50">
+              <div className="absolute top-0 right-0 bottom-0 w-full max-w-md h-[100dvh] bg-white shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col z-50">
                   {/* Header */}
                   <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-indigo-50/50">
                       <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
