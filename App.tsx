@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { CellData, ToolType, WeatherType, VariantType, ItemId, PetId, Rival, DailyReward, GameState } from './types';
-import { GRID_SIZE, INITIAL_MONEY, PLANTS, TICK_RATE, WEATHER_EFFECTS, VARIANTS, ITEMS, PETS, SHOP_REFRESH_RATE, DAILY_REWARDS } from './constants';
+import { GRID_SIZE, INITIAL_MONEY, PLANTS, TICK_RATE, WEATHER_EFFECTS, VARIANTS, ITEMS, PETS, SHOP_REFRESH_RATE, DAILY_REWARDS, SAVE_VERSION } from './constants';
 import GardenCell from './components/GardenCell';
 import Shop from './components/Shop';
 import Assistant from './components/Assistant';
@@ -12,7 +12,7 @@ import MainMenu from './components/MainMenu';
 import NameInputScreen from './components/NameInputScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
 import DailyRewardPopup from './components/DailyRewardPopup';
-import { Droplets, Shovel, ShoppingBasket, Coins, Wheat, Zap, HeartPulse, Crown, Star, Bone, Club, Annoyed, ShowerHead, User, Volume2, VolumeX, Music, Check, Menu, X, Backpack, ChevronDown, Store, RefreshCw } from 'lucide-react';
+import { Droplets, Shovel, ShoppingBasket, Coins, Wheat, Zap, HeartPulse, Crown, Star, Bone, Club, Annoyed, ShowerHead, User, Volume2, VolumeX, Music, Check, Menu, X, Backpack, ChevronDown, Store, RefreshCw, Briefcase, Info } from 'lucide-react';
 
 const SAVE_KEY = 'GARDEN_TYCOON_SAVE_LOCAL_PLAYER';
 const RIVALS_SAVE_KEY = 'GARDEN_TYCOON_RIVALS_V2'; 
@@ -25,7 +25,7 @@ const BOT_NAMES = [
   "Naruto", "Sasuke", "Goku", "Vegeta", "Luffy", "Zoro", "Conan"
 ];
 
-// Clean Playlist (Removed Morning Mood)
+// Clean Playlist
 const PLAYLIST = [
   { name: "Garden Ambience", url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3" }
 ];
@@ -35,10 +35,10 @@ const App: React.FC = () => {
   const [inMenu, setInMenu] = useState(true);
   const [showNameInput, setShowNameInput] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false); 
-  const [showDailyReward, setShowDailyReward] = useState(false); // Daily Reward Popup
+  const [showDailyReward, setShowDailyReward] = useState(false); 
   const [isLoading, setIsLoading] = useState(false);
-  const [isShopOpen, setIsShopOpen] = useState(false); // Mobile shop toggle
-  const [isInventoryOpen, setIsInventoryOpen] = useState(false); // New Inventory Drawer State
+  const [isShopOpen, setIsShopOpen] = useState(false); 
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false); 
   
   // --- Audio State ---
   const [isMuted, setIsMuted] = useState(false);
@@ -94,848 +94,688 @@ const App: React.FC = () => {
   const [rivals, setRivals] = useState<Rival[]>([]);
   const [toast, setToast] = useState<{msg: string, id: number} | null>(null);
 
-  // --- Data Loading Logic ---
-  useEffect(() => {
-      loadGameData();
-      loadRivalsData();
-  }, []);
+  // --- Helper Functions ---
+  const showToast = (msg: string) => {
+    setToast({ msg, id: Date.now() });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // --- Data Loading Logic (Robuster Version) ---
+  useEffect(() => { loadGameData(); loadRivalsData(); }, []);
 
   // --- MUSIC LOGIC ---
   useEffect(() => {
     const audio = audioRef.current;
     if (audio) {
         audio.volume = 0.4; 
-        if (!isMuted) {
-            audio.play().catch(() => {
-                const startMusic = () => {
-                    if (!isMuted && audioRef.current) audioRef.current.play();
-                    document.removeEventListener('click', startMusic);
-                };
-                document.addEventListener('click', startMusic);
-            });
-        }
+        if (!isMuted) audio.play().catch(() => {
+            // Autoplay policy prevented playback, user interaction required later
+        });
     }
-  }, [currentSongIndex]);
-
-  useEffect(() => {
-      if (audioRef.current) {
-          if (isMuted) audioRef.current.pause();
-          else audioRef.current.play().catch(e => console.log("Audio play failed:", e));
-      }
-  }, [isMuted]);
+  }, [currentSongIndex, isMuted]);
 
   // --- RIVAL SYSTEM LOGIC ---
   const loadRivalsData = () => {
     try {
         const savedRivalsStr = localStorage.getItem(RIVALS_SAVE_KEY);
         if (savedRivalsStr) {
-            const savedRivals: Rival[] = JSON.parse(savedRivalsStr);
-            const now = Date.now();
-            const updatedRivals = savedRivals.map(r => {
-                const timeDiff = (now - r.lastUpdated) / 1000;
-                if (timeDiff <= 0) return r;
-                const earnings = Math.floor(r.growthRate * timeDiff);
-                const levelsGained = Math.floor(earnings / 5000); 
-                return {
-                    ...r,
-                    money: r.money + earnings,
-                    level: r.level + levelsGained,
-                    lastUpdated: now,
-                    isOnline: Math.random() > 0.6
-                };
-            });
-            setRivals(updatedRivals);
+            setRivals(JSON.parse(savedRivalsStr));
         } else {
             generateInitialRivals();
         }
-    } catch (e) {
-        generateInitialRivals();
-    }
+    } catch (e) { generateInitialRivals(); }
   };
 
   const generateInitialRivals = () => {
       const newRivals: Rival[] = [];
-      newRivals.push({
-          id: 'admin_top_1', name: "ADMIN MINH3312", money: 99999999999, level: 1000,
-          growthRate: 100000, lastUpdated: Date.now(), isOnline: true
-      });
-      for (let i = 0; i < 49; i++) {
-          const name = BOT_NAMES[i % BOT_NAMES.length] + (i > 20 ? ` ${i}` : '');
-          const startLevel = Math.floor(Math.random() * 50) + 1;
+      for (let i = 0; i < 20; i++) {
+          const name = BOT_NAMES[i % BOT_NAMES.length];
           newRivals.push({
-              id: `rival_${i}`, name, money: startLevel * 1000, level: startLevel,
-              growthRate: 5 + Math.random() * 500, lastUpdated: Date.now(), isOnline: false
+              id: `rival_${i}`, name, money: (i + 1) * 1000, level: i + 1,
+              growthRate: 10 + i * 5, lastUpdated: Date.now(), isOnline: false
           });
       }
       setRivals(newRivals);
       localStorage.setItem(RIVALS_SAVE_KEY, JSON.stringify(newRivals));
   };
 
-  useEffect(() => {
-      const interval = setInterval(() => {
-          setRivals(prevRivals => {
-              const now = Date.now();
-              return prevRivals.map(r => {
-                  const earning = Math.ceil(r.growthRate * 2);
-                  return {
-                      ...r, money: r.money + earning,
-                      level: (Math.random() < 0.05 && earning > 100) ? r.level + 1 : r.level,
-                      lastUpdated: now, isOnline: Math.random() < 0.05 ? !r.isOnline : r.isOnline
-                  };
-              });
-          });
-      }, 2000);
-      return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-      if (rivals.length > 0) localStorage.setItem(RIVALS_SAVE_KEY, JSON.stringify(rivals));
-  }, [rivals]);
-
-  // --- REBALANCED SHOP STOCK LOGIC ---
+  // --- SHOP REFRESH LOGIC ---
   const refreshShopStock = () => {
       const allPlants = Object.values(PLANTS);
       const allItems = Object.values(ITEMS);
       const selectedStock: Record<string, number> = {};
       
-      // Basic Wheat: Reduced to 5-15 seeds
+      // Always guarantee wheat
       selectedStock['wheat'] = Math.floor(Math.random() * 11) + 5; 
       
-      // Randomly pick 4 to 8 other plants to sell
-      const targetCount = 4 + Math.floor(Math.random() * 5);
-      
-      for(let i=0; i<targetCount; i++) {
+      for(let i=0; i<6; i++) {
           const rand = Math.random();
-          let pool;
-          // Weights for rarity appearance
-          if (rand < 0.50) pool = allPlants.filter(p => p.rarity === 'Common' && p.id !== 'wheat');
-          else if (rand < 0.75) pool = allPlants.filter(p => p.rarity === 'Rare');
-          else if (rand < 0.90) pool = allPlants.filter(p => p.rarity === 'Epic');
-          else if (rand < 0.98) pool = allPlants.filter(p => p.rarity === 'Legendary');
-          else pool = allPlants.filter(p => ['Mythical', 'Celestial', 'Cyber'].includes(p.rarity));
+          let pool = allPlants;
+          if (rand < 0.5) pool = allPlants.filter(p => p.rarity === 'Common');
+          else if (rand < 0.8) pool = allPlants.filter(p => p.rarity === 'Rare');
           
           if(pool.length > 0) {
               const pick = pool[Math.floor(Math.random() * pool.length)];
-              let quantity = 1;
-              
-              // Scarcity Logic based on Rarity
-              switch(pick.rarity) {
-                  case 'Common': quantity = Math.floor(Math.random() * 10) + 5; break; // 5-14
-                  case 'Rare': quantity = Math.floor(Math.random() * 5) + 3; break; // 3-7
-                  case 'Epic': quantity = Math.floor(Math.random() * 3) + 2; break; // 2-4
-                  case 'Legendary': quantity = Math.floor(Math.random() * 2) + 1; break; // 1-2
-                  default: quantity = 1; // Mythical/Cyber/Celestial are extremely rare (1 stock)
-              }
-
-              if(selectedStock[pick.id]) selectedStock[pick.id] += quantity;
-              else selectedStock[pick.id] = quantity;
+              selectedStock[pick.id] = (selectedStock[pick.id] || 0) + Math.floor(Math.random() * 5) + 1;
           }
       }
-
-      // Items: Reduced to 1-3 per type
-      allItems.forEach(item => {
-          selectedStock[item.id] = Math.floor(Math.random() * 3) + 1; 
-      });
-
+      allItems.forEach(item => selectedStock[item.id] = Math.floor(Math.random() * 3) + 1);
       setShopStock(selectedStock);
       setShopNextRefresh(Date.now() + SHOP_REFRESH_RATE);
-  };
-
-  // --- Offline Simulation ---
-  const calculateOfflineProgress = (
-      savedGrid: CellData[], 
-      lastSave: number, 
-      sprinklerEnd: number
-  ): { newGrid: CellData[], growthMessages: string[] } => {
-      // Safety check for invalid dates
-      const safeLastSave = (!lastSave || isNaN(lastSave)) ? Date.now() : lastSave;
-      const now = Date.now();
-      const elapsedSeconds = (now - safeLastSave) / 1000;
-      const ONE_HOUR = 3600; // 1 hour in seconds
-
-      // Logic: If offline < 1 hour, DO NOTHING (return original grid).
-      // If offline >= 1 hour, grow all living plants to 100%.
-
-      if (elapsedSeconds < ONE_HOUR) {
-          return { newGrid: savedGrid, growthMessages: [] };
-      }
-
-      // If more than 1 hour passed
-      const messages: string[] = [];
-      let grownCount = 0;
-
-      const newGrid = savedGrid.map(cell => {
-          if (!cell.plantId || cell.isDead) return cell;
-
-          // If plant is already fully grown, keep it
-          if (cell.growthProgress >= 100) return cell;
-
-          // Otherwise, force grow to 100%
-          grownCount++;
-          return { 
-              ...cell, 
-              growthProgress: 100, 
-              // Keep water level as is (or set to safe level so they don't die instantly on next tick)
-              // waterLevel: cell.waterLevel 
-          };
-      });
-
-      if (grownCount > 0) {
-          messages.push(`Bạn đã vắng mặt hơn 1 tiếng. Tất cả ${grownCount} cây đã trưởng thành!`);
-      }
-
-      return { newGrid, growthMessages: messages };
   };
 
   const loadGameData = () => {
       try {
           const savedStr = localStorage.getItem(SAVE_KEY);
           if (savedStr) {
-              const savedData: GameState = JSON.parse(savedStr);
-              
-              // Helper to safely get value or default
-              const safeNum = (val: any, def: number) => (typeof val === 'number' && !isNaN(val)) ? val : def;
-
+              const savedData: any = JSON.parse(savedStr);
               setPlayerName(savedData.playerName || '');
-              setMoney(safeNum(savedData.money, INITIAL_MONEY));
-              setLevel(safeNum(savedData.level, 1));
-              setXp(safeNum(savedData.xp, 0));
+              setMoney(savedData.money || INITIAL_MONEY);
+              setLevel(savedData.level || 1);
               setInventory({ ...defaultInventory, ...(savedData.inventory || {}) });
               
-              // Load raw grid first
-              const rawGrid = savedData.grid || Array.from({ length: GRID_SIZE }, (_, i) => ({
-                  id: i, plantId: null, growthProgress: 0, waterLevel: 50, isDead: false, variant: 'Normal'
-              }));
-
-              const savedSprinklerEnd = safeNum(savedData.sprinklerEndTime, 0);
-              setSprinklerEndTime(savedSprinklerEnd);
+              // Safe Pet Loading: Filter out pets that don't exist in constants anymore
+              const validPets = (savedData.ownedPets || []).filter((id: string) => PETS[id as PetId]);
+              setOwnedPets(validPets);
               
-              // OFFLINE PROGRESS CALCULATION
-              const savedTime = safeNum(savedData.lastSaveTime, Date.now());
-              const { newGrid, growthMessages } = calculateOfflineProgress(rawGrid, savedTime, savedSprinklerEnd);
+              const validEquipped = savedData.equippedPet && PETS[savedData.equippedPet as PetId] ? savedData.equippedPet : null;
+              setEquippedPet(validEquipped);
               
-              setGrid(newGrid);
-              
-              // Notify user
-              if (growthMessages.length > 0) {
-                  // Delay slightly to let UI render
-                  setTimeout(() => {
-                      growthMessages.forEach(msg => showToast(msg));
-                  }, 1000);
+              // Load Grid with Sanitization
+              if (savedData.grid) {
+                   const loadedGrid = savedData.grid.map((cell: any) => {
+                       // Sanitize: If plantId exists in save but not in constants, remove it to prevent crash
+                       const isValidPlant = cell.plantId && PLANTS[cell.plantId];
+                       return {
+                           ...cell,
+                           plantId: isValidPlant ? cell.plantId : null,
+                           growthProgress: isValidPlant ? cell.growthProgress : 0,
+                           waterLevel: cell.waterLevel ?? 50,
+                           isDead: cell.isDead ?? false,
+                           variant: cell.variant || 'Normal'
+                       };
+                   });
+                   setGrid(loadedGrid);
               }
-
-              setSelectedSeedId(savedData.selectedSeedId ?? 'wheat');
-              setWeather(savedData.weather ?? 'Sunny');
-              setWeatherTimeLeft(safeNum(savedData.weatherTimeLeft, 0));
-              setOwnedPets(savedData.ownedPets || []);
-              setEquippedPet(savedData.equippedPet ?? null);
-              setPetCooldownTimer(safeNum(savedData.petCooldownTimer, 0));
-              setPetActiveTimer(safeNum(savedData.petActiveTimer, 0));
               
-              if (savedData.shopStock && savedData.shopNextRefresh > Date.now()) {
-                  setShopStock(savedData.shopStock);
-                  setShopNextRefresh(savedData.shopNextRefresh);
-              } else refreshShopStock();
-
-              // --- Daily Reward Logic Check ---
-              const now = new Date();
-              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-              const lastLogin = safeNum(savedData.lastLoginDate, 0);
-              const lastClaimed = safeNum(savedData.lastClaimedDate, 0);
-              let streak = safeNum(savedData.consecutiveDays, 1);
-
-              // Compare stored lastLogin (start of day) with today's start
-              if (lastLogin < todayStart) {
-                  const oneDay = 24 * 60 * 60 * 1000;
-                  // If difference is exactly one day (allow 2 days buffer for timezone safety/leniency)
-                  if (todayStart - lastLogin <= oneDay * 2) {
-                      if (todayStart - lastLogin > oneDay) {
-                         streak = 1;
-                      } else {
-                        if (lastClaimed < lastLogin) {
-                          streak += 1;
-                        }
-                      }
-                  } else {
-                      streak = 1;
-                  }
-                  setLastLoginDate(todayStart);
-                  setConsecutiveDays(streak);
-              } else {
-                  setLastLoginDate(lastLogin);
-                  setConsecutiveDays(streak);
-              }
-              setLastClaimedDate(lastClaimed);
-              setLastSaveTime(Date.now()); // Reset save time to now
-
-          } else refreshShopStock();
+              // Load Timers
+              setPetCooldownTimer(savedData.petCooldownTimer || 0);
+              setPetActiveTimer(savedData.petActiveTimer || 0);
+              setLastLoginDate(savedData.lastLoginDate || 0);
+              setConsecutiveDays(savedData.consecutiveDays || 1);
+              setLastClaimedDate(savedData.lastClaimedDate || 0);
+          } else {
+              refreshShopStock();
+          }
       } catch (e) { 
-          console.error("Failed to load save data, resetting...", e);
+          console.error("Save file corrupted, resetting shop", e);
           refreshShopStock(); 
-          // If save is corrupt, clear it to prevent infinite crash loops
-          localStorage.removeItem(SAVE_KEY);
       }
   };
 
-  const handleStartGame = () => {
-      if (!playerName || playerName.trim() === '') {
-          setInMenu(false); setShowNameInput(true);
-      } else {
-          setInMenu(false); setIsLoading(true);
-      }
-      if (!isMuted && audioRef.current) audioRef.current.play().catch(console.log);
-  };
-
-  const handleNameSubmit = (name: string) => {
-      setPlayerName(name); setShowNameInput(false); setIsLoading(true);
-      if (!isMuted && audioRef.current) audioRef.current.play().catch(console.log);
-  };
-
-  // --- Daily Reward Trigger ---
+  // --- SAVE LOGIC ---
   useEffect(() => {
-    if (!isLoading && !inMenu && !showNameInput) {
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        // If we haven't claimed today (lastClaimed < todayStart), show popup
-        if (lastClaimedDate < todayStart) {
-            // Small delay for effect
-            setTimeout(() => setShowDailyReward(true), 1000);
+    if (!inMenu && !isLoading && playerName) {
+        // Debounce or just save. For simplicity here we save, but wrapped in try-catch
+        try {
+            const stateToSave = {
+                playerName, money, level, xp, inventory, grid, weather,
+                ownedPets, equippedPet, petCooldownTimer, petActiveTimer,
+                shopStock, shopNextRefresh, lastLoginDate, consecutiveDays, lastClaimedDate,
+                version: SAVE_VERSION
+            };
+            localStorage.setItem(SAVE_KEY, JSON.stringify(stateToSave));
+        } catch (e) {
+            console.warn("Failed to save game data (probably quota exceeded)", e);
         }
     }
-  }, [isLoading, inMenu, showNameInput, lastClaimedDate]);
+  }, [money, grid, inventory, equippedPet, petCooldownTimer, petActiveTimer, weather, shopStock, playerName, inMenu, isLoading]);
 
-  const handleClaimDailyReward = () => {
-      const dayIndex = Math.min(Math.max(1, consecutiveDays), 7) - 1;
-      const reward = DAILY_REWARDS[dayIndex];
-      
-      if (reward.type === 'money') {
-          setMoney(prev => prev + (reward.value as number));
-      } else if (reward.type === 'item') {
-          const itemId = reward.value as ItemId;
-          setInventory(prev => ({
-              ...prev,
-              [itemId]: (prev[itemId] || 0) + reward.count
-          }));
-      } else if (reward.type === 'seed') {
-          const seedId = reward.value as string;
-          setShopStock(prev => ({
-              ...prev,
-              [seedId]: (prev[seedId] || 0) + reward.count
-          }));
-          const plant = PLANTS[seedId];
-          if (plant) setMoney(prev => prev + (plant.buyPrice * reward.count));
-          showToast(`Nhận ${reward.label} (Đã quy đổi + Thêm vào Shop)`);
-      }
-
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      setLastClaimedDate(todayStart);
-      setShowDailyReward(false);
-      showToast(`Đã nhận quà ngày ${consecutiveDays}!`);
-  };
-
-  // --- Auto-Save Fix ---
-  const gameStateRef = useRef({ 
-      playerName, money, level, xp, inventory, grid, weather, weatherTimeLeft, 
-      ownedPets, equippedPet, petCooldownTimer, petActiveTimer, selectedSeedId, 
-      sprinklerEndTime, shopStock, shopNextRefresh,
-      lastLoginDate, consecutiveDays, lastClaimedDate, lastSaveTime
-  });
-  
-  useEffect(() => {
-      gameStateRef.current = { 
-          playerName, money, level, xp, inventory, grid, weather, weatherTimeLeft, 
-          ownedPets, equippedPet, petCooldownTimer, petActiveTimer, selectedSeedId, 
-          sprinklerEndTime, shopStock, shopNextRefresh,
-          lastLoginDate, consecutiveDays, lastClaimedDate, 
-          lastSaveTime: Date.now() // Always update save time reference to NOW
-      };
-  }, [playerName, money, level, xp, inventory, grid, weather, weatherTimeLeft, ownedPets, equippedPet, petCooldownTimer, petActiveTimer, selectedSeedId, sprinklerEndTime, shopStock, shopNextRefresh, lastLoginDate, consecutiveDays, lastClaimedDate]);
-
-  useEffect(() => {
-      const handleSave = () => {
-          // Only save if we have a valid player name (game started/loaded)
-          if (gameStateRef.current.playerName) {
-              // Ensure we capture the exact moment of saving
-              const stateToSave = {
-                  ...gameStateRef.current,
-                  lastSaveTime: Date.now()
-              };
-              localStorage.setItem(SAVE_KEY, JSON.stringify(stateToSave));
-          }
-      };
-
-      // Save immediately on tab close or refresh
-      window.addEventListener('beforeunload', handleSave);
-
-      // Auto-save every 5 seconds only if playing (Leaderboard allowed)
-      const interval = setInterval(() => {
-           if (!inMenu && !isLoading && !showNameInput) {
-               handleSave();
-           }
-      }, 5000);
-
-      return () => {
-          window.removeEventListener('beforeunload', handleSave);
-          clearInterval(interval);
-      };
-  }, [inMenu, isLoading, showNameInput]); 
-
-  // --- Game Loop (Growth) ---
-  const showToast = (msg: string) => {
-    setToast({ msg, id: Date.now() });
-    setTimeout(() => setToast(null), 2000);
-  };
-
-  const getMaxXp = (lvl: number) => lvl * 100;
-  const addXp = (amount: number) => {
-      let newXp = xp + amount;
-      let newLevel = level;
-      let needed = getMaxXp(newLevel);
-      while (newXp >= needed) {
-          newXp -= needed; newLevel++; needed = getMaxXp(newLevel);
-          showToast(`LÊN CẤP! Bạn đạt cấp độ ${newLevel}!`);
-      }
-      setXp(newXp); setLevel(newLevel);
-  };
-
+  // --- GAME LOOP ---
   useEffect(() => {
     if (inMenu || isLoading) return;
-    const interval = setInterval(() => {
-      if (Date.now() >= shopNextRefresh) refreshShopStock();
-      // Sprinkler check
+
+    const tick = setInterval(() => {
+      // 1. Weather Timer
+      if (weather !== 'Sunny') {
+          setWeatherTimeLeft(prev => {
+              if (prev <= 1) { setWeather('Sunny'); return 0; }
+              return prev - 1;
+          });
+      }
+
+      // 2. Pet Timers
+      if (petActiveTimer > 0) {
+          setPetActiveTimer(prev => prev - 1);
+      } else if (petCooldownTimer > 0) {
+          setPetCooldownTimer(prev => prev - 1);
+      }
+
+      // 3. Auto Activate Pet Ability
+      if (equippedPet && PETS[equippedPet] && petActiveTimer > 0) {
+          const pet = PETS[equippedPet];
+          if (pet.abilityType === 'buff_money') {
+             setMoney(m => m + (pet.abilityValue as number));
+          }
+      }
+
+      // 4. Sprinkler Logic
       const isSprinklerActive = Date.now() < sprinklerEndTime;
-      // Grid update
-      setGrid((prevGrid) => prevGrid.map((cell) => {
-          if (!cell.plantId || cell.isDead) return cell;
+
+      // 5. Grid Updates
+      setGrid(prevGrid => prevGrid.map(cell => {
+          if (!cell.plantId) return cell;
+          if (cell.isDead) return cell;
+
           const plant = PLANTS[cell.plantId];
-          const wInfo = WEATHER_EFFECTS[weather];
-          
-          if (isSprinklerActive) {
-               return { ...cell, waterLevel: 100, growthProgress: Math.min(100, cell.growthProgress + ((100 / plant.growthTime) * wInfo.growthMod)) };
+          // CRITICAL SAFETY CHECK: If plant data is missing (corruption), skip update or kill plant
+          if (!plant) {
+              return { ...cell, plantId: null, growthProgress: 0 };
           }
 
-          let consume = plant.waterConsumption * wInfo.waterMod;
-          let newWater = consume < 0 ? Math.min(100, cell.waterLevel + Math.abs(consume)) : Math.max(0, cell.waterLevel - consume);
-          if (weather === 'Snowy' || weather === 'Blizzard') newWater = cell.waterLevel;
-          
-          if (newWater <= 0.1 && cell.growthProgress < 100) return { ...cell, waterLevel: 0, isDead: true };
-          
-          let newGrowth = cell.growthProgress;
-          if (newWater > 0 && newGrowth < 100) newGrowth = Math.min(100, newGrowth + (100 / plant.growthTime) * wInfo.growthMod);
-          if (newWater <= 0.1 && newGrowth >= 100) return { ...cell, growthProgress: 100, waterLevel: 0, isDead: false };
+          const weatherInfo = WEATHER_EFFECTS[weather];
+          const variantInfo = VARIANTS[cell.variant];
 
-          return { ...cell, growthProgress: newGrowth, waterLevel: newWater, isDead: false };
+          // Water Logic
+          let waterChange = -plant.waterConsumption * weatherInfo.waterMod;
+          if (isSprinklerActive) waterChange += 5; 
+          
+          let newWater = Math.max(0, Math.min(100, cell.waterLevel + waterChange));
+          
+          // Death Logic
+          if (newWater <= 0) return { ...cell, waterLevel: 0, isDead: true };
+
+          // Growth Logic
+          if (cell.growthProgress < 100) {
+             let growthSpeed = (100 / plant.growthTime); // Base per second
+             
+             // Modifiers
+             if (newWater > 80) growthSpeed *= 1.2; // Well watered
+             if (newWater < 30) growthSpeed *= 0.5; // Thirsty
+             growthSpeed *= weatherInfo.growthMod;
+             growthSpeed *= variantInfo.multiplier; 
+             
+             // Pet Growth Ability
+             if (equippedPet && PETS[equippedPet] && petActiveTimer > 0 && PETS[equippedPet].abilityType === 'grow_plants') {
+                 growthSpeed *= (1 + (PETS[equippedPet].abilityValue as number) / 100);
+             }
+
+             return {
+                 ...cell,
+                 waterLevel: newWater,
+                 growthProgress: Math.min(100, cell.growthProgress + growthSpeed)
+             };
+          }
+
+          return { ...cell, waterLevel: newWater };
       }));
+
     }, TICK_RATE);
-    return () => clearInterval(interval);
-  }, [weather, inMenu, isLoading, sprinklerEndTime, shopNextRefresh]);
 
-  // Pet Logic
-  useEffect(() => {
-    if (inMenu || !equippedPet) return;
-    const pet = PETS[equippedPet];
-    const timer = setInterval(() => {
-        if (petActiveTimer > 0) {
-            setPetActiveTimer(prev => prev - 1);
-            if (pet.abilityType === 'buff_money') setMoney(prev => prev + (pet.abilityValue as number));
-            if (pet.abilityType === 'grow_plants') setGrid(p => p.map(c => (c.plantId && !c.isDead) ? { ...c, growthProgress: Math.min(100, c.growthProgress + (pet.abilityValue as number)) } : c));
-            if (petActiveTimer === 1) setPetCooldownTimer(pet.baseCooldown);
-        } else if (petCooldownTimer > 0) setPetCooldownTimer(prev => prev - 1);
-        else if (petCooldownTimer === 0 && petActiveTimer === 0) setPetActiveTimer(pet.activeDuration);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [equippedPet, petCooldownTimer, petActiveTimer, inMenu]);
+    return () => clearInterval(tick);
+  }, [inMenu, isLoading, weather, petActiveTimer, equippedPet, sprinklerEndTime]);
 
-  // Weather Change
-  useEffect(() => {
-      if (inMenu) return;
-      const interval = setInterval(() => {
-          if (weather !== 'Sunny') {
-              if (weatherTimeLeft > 0) setWeatherTimeLeft(prev => prev - 1);
-              else setWeather('Sunny');
-          } else if (Math.random() < 0.005) {
-               setWeather('Rainy'); setWeatherTimeLeft(180); showToast("Trời bắt đầu mưa!");
-          }
-      }, 1000);
-      return () => clearInterval(interval);
-  }, [weather, weatherTimeLeft, inMenu]);
+  // --- HANDLERS ---
+  const handleCellClick = (id: number) => {
+    setGrid(prev => {
+        const newGrid = [...prev];
+        const cell = newGrid[id];
+        
+        // 1. Use Tool: Revive
+        if (selectedTool === 'revive_potion' && cell.isDead) {
+             if (inventory['revive_potion'] > 0) {
+                 setInventory(inv => ({ ...inv, revive_potion: inv.revive_potion - 1 }));
+                 cell.isDead = false;
+                 cell.waterLevel = 50;
+                 showToast("Đã hồi sinh cây!");
+             } else showToast("Hết thuốc hồi sinh!");
+             return newGrid;
+        }
 
+        // 2. Use Tool: Fertilizer
+        if (selectedTool === 'fertilizer' && cell.plantId && !cell.isDead && cell.growthProgress < 100) {
+            if (inventory['fertilizer'] > 0) {
+                setInventory(inv => ({ ...inv, fertilizer: inv.fertilizer - 1 }));
+                cell.growthProgress = Math.min(100, cell.growthProgress + 40);
+                showToast("Đã bón phân!");
+            } else showToast("Hết phân bón!");
+            return newGrid;
+        }
 
-  // --- Actions ---
-  const handleBuyItem = (itemId: ItemId) => {
-      const item = ITEMS[itemId];
-      if ((shopStock[itemId] || 0) <= 0) return showToast("Hết hàng!");
-      if (money >= item.price) {
+        // 3. Harvest / Remove Dead
+        if (cell.isDead || (cell.plantId && cell.growthProgress >= 100 && selectedTool === 'harvest')) {
+            if (cell.isDead) {
+                // Clear dead
+                cell.plantId = null; cell.growthProgress = 0; cell.waterLevel = 50; cell.isDead = false; cell.variant = 'Normal';
+            } else {
+                // Harvest
+                const plant = PLANTS[cell.plantId!];
+                if (!plant) { // Safety check
+                    cell.plantId = null; cell.growthProgress = 0; return newGrid;
+                }
+                const variant = VARIANTS[cell.variant];
+                const sellPrice = Math.floor(plant.sellPrice * variant.multiplier);
+                
+                setMoney(m => m + sellPrice);
+                setXp(x => x + plant.xpReward);
+                
+                // Level Up Logic
+                const xpNeeded = level * 100;
+                if (xp + plant.xpReward >= xpNeeded) {
+                    setLevel(l => l + 1);
+                    setXp(0);
+                    showToast(`Lên cấp ${level + 1}!`);
+                }
+
+                showToast(`+ $${sellPrice}`);
+                cell.plantId = null; cell.growthProgress = 0; cell.waterLevel = 50; cell.variant = 'Normal';
+            }
+            return newGrid;
+        }
+
+        // 4. Plant Seed
+        if (!cell.plantId && selectedSeedId) {
+            const plant = PLANTS[selectedSeedId];
+            if (!plant) return newGrid; // Safety check
+
+            if (money >= plant.buyPrice) {
+                setMoney(m => m - plant.buyPrice);
+                cell.plantId = selectedSeedId;
+                cell.growthProgress = 0;
+                cell.waterLevel = 50;
+                cell.isDead = false;
+                
+                // Variant Chance
+                const rand = Math.random();
+                let chosenVariant: VariantType = 'Normal';
+                
+                // Check weather specific variants first
+                const weatherInfo = WEATHER_EFFECTS[weather];
+                if (weatherInfo.specialVariant && Math.random() < (weatherInfo.specialVariantChance || 0)) {
+                    chosenVariant = weatherInfo.specialVariant;
+                } else {
+                    // Standard luck
+                    if (rand < 0.01) chosenVariant = 'Diamond';
+                    else if (rand < 0.06) chosenVariant = 'Golden';
+                    else if (rand < 0.21) chosenVariant = 'Good';
+                }
+                
+                cell.variant = chosenVariant;
+                if (chosenVariant !== 'Normal') showToast(`Wow! Biến thể ${VARIANTS[chosenVariant].label}`);
+            } else {
+                showToast("Không đủ tiền!");
+            }
+            return newGrid;
+        }
+
+        // 5. Water
+        if (selectedTool === 'water' && cell.plantId && !cell.isDead) {
+            cell.waterLevel = 100;
+            return newGrid;
+        }
+        
+        return newGrid;
+    });
+  };
+
+  const handleBuyItem = (id: ItemId) => {
+      const item = ITEMS[id];
+      if (money >= item.price && (shopStock[id] || 0) > 0) {
           setMoney(m => m - item.price);
-          setInventory(i => ({ ...i, [itemId]: (i[itemId] || 0) + 1 }));
-          setShopStock(s => ({ ...s, [itemId]: s[itemId] - 1 }));
-          showToast(`Đã mua ${item.name}`);
-      } else showToast("Thiếu tiền!");
+          setShopStock(s => ({ ...s, [id]: s[id] - 1 }));
+          
+          if (item.effect === 'auto_water') {
+              // Activate Sprinkler immediately
+              setSprinklerEndTime(Date.now() + (item.duration || 0) * 1000);
+              showToast(`Đã kích hoạt ${item.name}`);
+          } else {
+              setInventory(inv => ({ ...inv, [id]: (inv[id] || 0) + 1 }));
+              showToast(`Đã mua ${item.name}`);
+          }
+      }
   };
 
-  const handleBuyPet = (petId: PetId) => {
-      const pet = PETS[petId];
-      if (ownedPets.includes(petId)) { setEquippedPet(petId); return; }
-      if (money >= pet.price) {
+  const handleBuyPet = (id: PetId) => {
+      const pet = PETS[id];
+      if (money >= pet.price && !ownedPets.includes(id)) {
           setMoney(m => m - pet.price);
-          setOwnedPets(p => [...p, petId]);
-          setEquippedPet(petId);
-      }
-  };
-
-  const handleCellClick = (cellId: number) => {
-      const idx = grid.findIndex(c => c.id === cellId);
-      if (idx === -1) return;
-      const cell = grid[idx];
-      let newGrid = [...grid];
-      let newMoney = money;
-      const inv = { ...inventory };
-
-      if(selectedTool === 'select_seed') {
-          if(cell.plantId) return showToast("Đã có cây!");
-          if(!selectedSeedId) return;
-          const p = PLANTS[selectedSeedId];
-          if(money < p.buyPrice) return showToast("Thiếu tiền!");
-          if((shopStock[selectedSeedId] || 0) <= 0) return showToast("Hết hạt giống!");
+          setOwnedPets(prev => [...prev, id]);
           
-          setShopStock(s => ({ ...s, [selectedSeedId]: s[selectedSeedId] - 1 }));
-          newMoney -= p.buyPrice;
-          
-          // Luck logic
-          let variant: VariantType = 'Normal';
-          if(Math.random() < 0.05) variant = 'Golden';
-          
-          newGrid[idx] = { ...cell, plantId: selectedSeedId, growthProgress: 0, waterLevel: 100, isDead: false, variant };
-      } 
-      else if (selectedTool === 'water') {
-          if(!cell.plantId) return;
-          newGrid[idx] = { ...cell, waterLevel: 100 };
+          // Auto equip if first pet
+          if (ownedPets.length === 0) {
+              setEquippedPet(id);
+              showToast(`Đã mua và trang bị ${pet.name}!`);
+          } else {
+              showToast(`Đã mua ${pet.name}! Vào Balo để trang bị.`);
+          }
       }
-      else if (selectedTool === 'harvest') {
-          if(cell.isDead || !cell.plantId || cell.growthProgress < 100) return;
-          const p = PLANTS[cell.plantId];
-          const mult = VARIANTS[cell.variant].multiplier;
-          newMoney += Math.floor(p.sellPrice * mult);
-          addXp(p.xpReward * mult);
-          newGrid[idx] = { ...cell, plantId: null, growthProgress: 0, waterLevel: 50, variant: 'Normal' };
-      }
-      else if (selectedTool === 'shovel') {
-          if(!cell.plantId) return;
-          newGrid[idx] = { ...cell, plantId: null, growthProgress: 0, waterLevel: 50, variant: 'Normal', isDead: false };
-      }
-      else if (ITEMS[selectedTool as ItemId]) {
-          // Item usage
-           if(inv[selectedTool as ItemId] > 0) {
-               inv[selectedTool as ItemId]--;
-               setInventory(inv);
-               if(selectedTool === 'fertilizer' && cell.plantId) newGrid[idx].growthProgress = Math.min(100, cell.growthProgress + 40);
-               if(selectedTool === 'revive_potion' && cell.isDead) { newGrid[idx].isDead = false; newGrid[idx].waterLevel = 50; }
-               if(selectedTool.includes('sprinkler')) {
-                   const dur = ITEMS[selectedTool as ItemId].duration || 100;
-                   setSprinklerEndTime(Math.max(Date.now(), sprinklerEndTime) + dur * 1000);
-               }
-               // Toys
-               if(selectedTool === 'toy_ball' && equippedPet) setPetCooldownTimer(prev => Math.max(0, prev - (ITEMS['toy_ball'].cooldownReduction || 60)));
-               if(selectedTool === 'toy_yarn' && equippedPet) setPetCooldownTimer(prev => Math.max(0, prev - (ITEMS['toy_yarn'].cooldownReduction || 120)));
-               if(selectedTool === 'toy_whistle' && equippedPet) setPetCooldownTimer(0);
-               
-               if(selectedTool.includes('toy')) showToast("Pet vui vẻ hơn!");
-           } else {
-               showToast("Đã hết vật phẩm này!");
-               setSelectedTool('water'); // Reset to water if empty
-           }
-      }
-
-      setMoney(newMoney);
-      setGrid(newGrid);
   };
 
-  // Helper to check if tool is a basic tool
-  const isBasicTool = (t: ToolType) => ['water', 'harvest', 'shovel', 'select_seed'].includes(t);
-
-  const ToolButton = ({ tool, icon: Icon, label, color, count, onClick }: any) => {
-      const isActive = selectedTool === tool;
-      const handleClick = onClick ? onClick : () => {
-          setSelectedTool(tool);
-          if (!isBasicTool(tool)) setIsInventoryOpen(false); // Close drawer if selecting item
-      };
-
-      return (
-        <button
-            onClick={handleClick}
-            className={`
-                flex flex-col items-center justify-center p-2 rounded-xl transition-all duration-200 min-w-[64px] flex-1
-                ${isActive ? `bg-${color}-500 text-white shadow-lg -translate-y-2 scale-105` : `bg-transparent text-slate-500 hover:bg-slate-100`}
-            `}
-        >
-            <div className="relative">
-                <Icon className={`w-6 h-6 mb-1 ${isActive ? 'animate-bounce' : ''}`} />
-                {count !== undefined && count > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                        {count}
-                    </span>
-                )}
-            </div>
-            <span className="text-[10px] font-bold uppercase">{label}</span>
-        </button>
-      )
+  const handleEquipPet = (id: PetId) => {
+      if (equippedPet === id) return;
+      setEquippedPet(id);
+      setPetCooldownTimer(0);
+      setPetActiveTimer(0);
+      showToast(`Đã gọi ${PETS[id].name} ra sân!`);
   };
 
-  const InventoryItemButton = ({ itemId }: { itemId: ItemId }) => {
-      const item = ITEMS[itemId];
-      const count = inventory[itemId] || 0;
-      const isActive = selectedTool === itemId;
+  const handlePetClick = () => {
+      if (!equippedPet || !PETS[equippedPet]) return;
+      if (petActiveTimer > 0) return; // Already active
+      if (petCooldownTimer > 0) {
+          showToast(`Đang hồi chiêu: ${petCooldownTimer}s`);
+          return;
+      }
 
-      return (
-          <button
-            onClick={() => { setSelectedTool(itemId); setIsInventoryOpen(false); }}
-            className={`
-                relative flex flex-col items-center p-3 rounded-2xl border-2 transition-all
-                ${isActive ? 'bg-indigo-50 border-indigo-500' : 'bg-white border-slate-100 hover:border-indigo-200'}
-                ${count === 0 ? 'opacity-50 grayscale' : ''}
-            `}
-          >
-              <div className="text-2xl mb-1">{item.emoji}</div>
-              <div className="text-[10px] font-bold text-slate-700 text-center leading-tight">{item.name}</div>
-              <div className={`absolute top-2 right-2 text-[10px] font-bold px-1.5 rounded-full ${count > 0 ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                  {count}
-              </div>
-          </button>
-      );
+      const pet = PETS[equippedPet];
+      setPetActiveTimer(pet.activeDuration);
+      setPetCooldownTimer(pet.baseCooldown);
+      showToast(`Kích hoạt kỹ năng ${pet.name}!`);
+
+      // Immediate effects
+      if (pet.abilityType === 'summon_weather') {
+          setWeather(pet.abilityValue as WeatherType);
+          setWeatherTimeLeft(90); // Pet weather duration
+      }
   };
 
-  const activePlants = grid.filter(c => c.plantId && !c.isDead).length;
+  const toggleTool = (tool: ToolType) => setSelectedTool(tool);
+
+  // --- RENDER ---
+  if (inMenu) return <MainMenu onStart={() => setInMenu(false)} playerName={playerName} />;
 
   return (
-    <>
-    <audio ref={audioRef} src={PLAYLIST[0].url} loop />
+    <div className="relative w-full h-screen overflow-hidden bg-[#e0f2fe] font-sans">
+      {/* Background Ambience */}
+      <audio ref={audioRef} src={PLAYLIST[currentSongIndex].url} loop hidden />
+      
+      {/* HUD: Top Bar */}
+      <div className="absolute top-0 left-0 right-0 p-4 z-30 flex justify-between items-start pointer-events-none">
+          {/* User Info */}
+          <div className="pointer-events-auto flex flex-col gap-2">
+              <div className="bg-white/80 backdrop-blur-md p-2 rounded-2xl shadow-md border border-white flex items-center gap-3 pr-4">
+                  <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                      {level}
+                  </div>
+                  <div>
+                      <div className="font-black text-slate-800 text-sm">{playerName || "Nông Dân"}</div>
+                      <div className="w-24 h-2 bg-slate-200 rounded-full mt-1 overflow-hidden">
+                          <div 
+                             className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
+                             style={{ width: `${(xp / (level * 100)) * 100}%` }}
+                          />
+                      </div>
+                  </div>
+              </div>
+              <div className="bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-white inline-flex items-center gap-2 self-start">
+                  <Coins className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                  <span className="font-black text-slate-700 text-lg">${money.toLocaleString()}</span>
+              </div>
+          </div>
 
-    {/* Emergency Reset Button (Visible only if critical error state stuck) */}
-    <div className="fixed bottom-2 right-2 z-[9999] opacity-20 hover:opacity-100 transition-opacity">
-         <button 
-            onClick={() => {
-                if(window.confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu game và chơi lại từ đầu? (Dùng khi game bị lỗi)')) {
-                    localStorage.clear();
-                    window.location.reload();
-                }
-            }}
-            className="bg-red-500 text-white p-2 rounded-full text-xs font-bold shadow-lg flex items-center gap-1"
-         >
-             <RefreshCw className="w-3 h-3"/> Reset
-         </button>
-    </div>
+          {/* Weather & Actions */}
+          <div className="pointer-events-auto flex flex-col items-end gap-2">
+              <WeatherDisplay weather={weather} />
+              
+              <div className="flex gap-2">
+                  <button 
+                    onClick={() => setIsInventoryOpen(true)}
+                    className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-white hover:bg-indigo-50 transition-colors"
+                  >
+                      <Briefcase className="w-5 h-5 text-slate-600" />
+                  </button>
+                  <button 
+                    onClick={() => setShowLeaderboard(true)}
+                    className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-white hover:bg-yellow-50 transition-colors"
+                  >
+                      <Crown className="w-5 h-5 text-yellow-600" />
+                  </button>
+                  <button 
+                    onClick={() => setIsMuted(!isMuted)}
+                    className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-white hover:bg-slate-50 transition-colors"
+                  >
+                      {isMuted ? <VolumeX className="w-5 h-5 text-slate-400" /> : <Volume2 className="w-5 h-5 text-slate-600" />}
+                  </button>
+              </div>
+          </div>
+      </div>
 
-    {inMenu ? (
-        <MainMenu onStart={handleStartGame} playerName={playerName} onShowLeaderboard={() => { setInMenu(false); setShowLeaderboard(true); }} />
-    ) : showLeaderboard ? (
-        <LeaderboardScreen currentPlayer={{ name: playerName || 'Bạn', money, level }} rivals={rivals} onClose={() => { setShowLeaderboard(false); setInMenu(true); }} />
-    ) : showNameInput ? (
-        <NameInputScreen onSubmit={handleNameSubmit} />
-    ) : (
-        <>
-            {isLoading && <LoadingScreen onFinished={() => setIsLoading(false)} />}
-            
-            {showDailyReward && (
-                <DailyRewardPopup currentStreak={consecutiveDays} onClaim={handleClaimDailyReward} />
-            )}
+      {/* Main Game Area */}
+      <div className="absolute inset-0 flex flex-col md:flex-row pt-24 gap-6 z-10 overflow-hidden">
+          
+          {/* Garden Grid - Centered */}
+          {/* CRITICAL UI FIX: Mobile Layout adjustments 
+              - justify-start: starts grid from top (prevents overlapping bottom bar on small screens)
+              - pb-64: Huge bottom padding ensures the last row is never hidden behind the dock
+              - pt-4: Top padding for breathing room
+          */}
+          <div className="flex-1 flex flex-col items-center justify-start md:justify-center h-full overflow-y-auto scrollbar-hide pt-4 md:pt-0 pb-64 md:pb-0">
+             <div className="grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 max-w-2xl w-full px-4 shrink-0">
+                 {grid.map(cell => (
+                     <GardenCell 
+                        key={cell.id} 
+                        cell={cell} 
+                        onClick={handleCellClick} 
+                        isSelected={false}
+                     />
+                 ))}
+             </div>
+          </div>
 
-            <div className={`
-                min-h-screen flex flex-col transition-all duration-1000 overflow-hidden
-                ${WEATHER_EFFECTS[weather].bgClass}
-                ${isLoading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}
-            `}>
-            
-            {/* --- TOP HUD (Fixed) --- */}
-            <div className="fixed top-0 left-0 right-0 z-50 p-4 pointer-events-none">
-                <div className="max-w-[1600px] mx-auto flex justify-between items-start">
-                    {/* Left: Money & Level */}
-                    <div className="pointer-events-auto flex flex-col gap-2 animate-in slide-in-from-top-10 fade-in duration-500">
-                         <div className="bg-white/80 backdrop-blur-xl rounded-full pl-2 pr-6 py-2 shadow-xl border border-white/50 flex items-center gap-3">
-                             <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white">
-                                 <Coins className="w-6 h-6 text-white" />
-                             </div>
-                             <div>
-                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Tài Sản</div>
-                                 <div className="text-xl font-black text-slate-800 leading-none">${money.toLocaleString()}</div>
-                             </div>
-                         </div>
-                         
-                         <div className="bg-white/80 backdrop-blur-xl rounded-full px-4 py-1.5 shadow-lg border border-white/50 flex items-center gap-3 w-max">
-                             <span className="text-xs font-black text-indigo-500">LVL {level}</span>
-                             <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                 <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${(xp / getMaxXp(level)) * 100}%` }} />
-                             </div>
-                         </div>
-                    </div>
+          {/* Desktop Shop Sidebar */}
+          <div className="hidden md:block w-80 h-[85vh] self-center mr-8">
+              <Shop 
+                  money={money} level={level}
+                  selectedSeedId={selectedSeedId} onSelectSeed={setSelectedSeedId}
+                  onBuyItem={handleBuyItem} onBuyPet={handleBuyPet} ownedPets={ownedPets}
+                  shopStock={shopStock} shopNextRefresh={shopNextRefresh}
+              />
+          </div>
+      </div>
 
-                    {/* Right: Controls & Weather */}
-                    <div className="pointer-events-auto flex gap-2 items-start">
-                         <div className="hidden md:block mr-4"><WeatherDisplay weather={weather} /></div>
-                         
-                         <button onClick={() => setIsMuted(!isMuted)} className="bg-white/80 p-3 rounded-full shadow-lg hover:scale-110 transition-transform">
-                            {isMuted ? <VolumeX className="w-5 h-5 text-slate-400"/> : <Volume2 className="w-5 h-5 text-indigo-500"/>}
-                        </button>
-                        <button onClick={() => setIsShopOpen(!isShopOpen)} className="xl:hidden bg-white/80 p-3 rounded-full shadow-lg hover:scale-110 transition-transform relative">
-                            <Store className="w-5 h-5 text-emerald-600"/>
-                            <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></span>
-                        </button>
-                    </div>
-                </div>
-            </div>
+      {/* Bottom Toolbar (Refined Dock Style) */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white/70 backdrop-blur-xl p-2 rounded-full shadow-2xl border border-white/60 flex items-center gap-2 transition-all hover:scale-105 hover:bg-white/80">
+          <button 
+            onClick={() => toggleTool('water')}
+            className={`p-3.5 rounded-full transition-all duration-300 ${selectedTool === 'water' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 scale-110' : 'hover:bg-blue-50 text-slate-500'}`}
+          >
+              <Droplets className="w-6 h-6" />
+          </button>
+          <button 
+            onClick={() => toggleTool('harvest')}
+            className={`p-3.5 rounded-full transition-all duration-300 ${selectedTool === 'harvest' ? 'bg-green-500 text-white shadow-lg shadow-green-500/30 scale-110' : 'hover:bg-green-50 text-slate-500'}`}
+          >
+              <ShoppingBasket className="w-6 h-6" />
+          </button>
+          
+          <div className="w-[1px] h-6 bg-slate-300 mx-1" />
 
-            {/* --- MAIN LAYOUT CONTAINER --- */}
-            <div className="flex-1 flex flex-col xl:flex-row h-screen pt-24 pb-28 xl:pb-6 gap-6 overflow-hidden max-w-[1800px] mx-auto w-full px-4">
-                
-                {/* Center: Garden Grid (Responsive Width) */}
-                <div className="flex-1 flex flex-col items-center justify-center relative z-10 w-full overflow-y-auto xl:overflow-visible">
-                    <div className="w-full max-w-md md:max-w-xl xl:max-w-2xl transition-all duration-500">
-                         {/* Stats Row for Mobile */}
-                         <div className="flex justify-between items-end mb-4 px-2 xl:hidden">
-                             <div className="bg-white/40 backdrop-blur-md px-4 py-1 rounded-full text-xs font-bold text-slate-700 border border-white/40">
-                                 {activePlants}/{GRID_SIZE} Cây
-                             </div>
-                             <div className="md:hidden"><WeatherDisplay weather={weather} /></div>
-                         </div>
-                         
-                         {/* THE GRID */}
-                         <div className="grid grid-cols-3 gap-3 md:gap-5 p-4 md:p-6 bg-white/20 backdrop-blur-xl rounded-[2rem] shadow-[inset_0_0_60px_rgba(255,255,255,0.3)] border border-white/30">
-                             {grid.map(cell => (
-                                 <GardenCell key={cell.id} cell={cell} onClick={handleCellClick} isSelected={false} />
-                             ))}
-                         </div>
-                    </div>
-                </div>
+          {/* Quick Item Access (Fertilizer) */}
+          <button 
+            onClick={() => toggleTool('fertilizer')}
+            className={`p-3.5 rounded-full transition-all duration-300 relative ${selectedTool === 'fertilizer' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30 scale-110' : 'hover:bg-amber-50 text-slate-500'}`}
+          >
+              <Zap className="w-6 h-6" />
+              <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white shadow-sm">
+                  {inventory['fertilizer'] || 0}
+              </span>
+          </button>
 
-                {/* Right: Persistent Shop (Desktop) / Drawer (Mobile) */}
-                <div className={`
-                    fixed inset-y-0 right-0 w-80 md:w-96 bg-white/95 backdrop-blur-2xl shadow-2xl transform transition-transform duration-300 z-[60]
-                    xl:relative xl:transform-none xl:w-[400px] xl:bg-transparent xl:shadow-none xl:backdrop-blur-none xl:z-auto xl:flex xl:flex-col xl:justify-center
-                    ${isShopOpen ? 'translate-x-0' : 'translate-x-full xl:translate-x-0'}
-                `}>
-                    <div className="h-full flex flex-col p-4 xl:p-0 xl:h-[85vh]">
-                        <div className="xl:hidden flex justify-between items-center mb-4 pt-safe-top">
-                            <h2 className="text-xl font-black text-slate-800">Cửa Hàng</h2>
-                            <button onClick={() => setIsShopOpen(false)} className="p-2 bg-slate-100 rounded-full"><X className="w-5 h-5"/></button>
-                        </div>
-                        <Shop 
-                            money={money} level={level} selectedSeedId={selectedSeedId}
-                            onSelectSeed={(id) => { setSelectedSeedId(id); setSelectedTool('select_seed'); if(window.innerWidth < 1280) setIsShopOpen(false); }}
-                            onBuyItem={handleBuyItem} onBuyPet={handleBuyPet} ownedPets={ownedPets}
-                            shopStock={shopStock} shopNextRefresh={shopNextRefresh}
-                        />
-                    </div>
-                </div>
+          {/* Mobile Shop Button */}
+          <button 
+            onClick={() => setIsShopOpen(true)}
+            className="md:hidden p-3.5 rounded-full bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-600 transition-all ml-1"
+          >
+              <Store className="w-6 h-6" />
+          </button>
+      </div>
 
-            </div>
-
-            {/* --- DOCK + INVENTORY DRAWER --- */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
-                <div className="max-w-xl mx-auto p-4 flex flex-col justify-end pb-safe-bottom">
-                    
-                    {/* Inventory Drawer (Popup) */}
-                    {isInventoryOpen && (
-                        <div className="pointer-events-auto bg-white/90 backdrop-blur-2xl rounded-3xl p-5 mb-3 shadow-2xl border border-white/50 animate-in slide-in-from-bottom-5 fade-in duration-300 mx-2">
-                             <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
-                                 <h3 className="font-bold text-slate-700 flex items-center gap-2"><Backpack className="w-4 h-4"/> Túi Đồ Của Bạn</h3>
-                                 <button onClick={() => setIsInventoryOpen(false)}><ChevronDown className="w-5 h-5 text-slate-400"/></button>
-                             </div>
-
-                             <div className="space-y-4 max-h-[40vh] overflow-y-auto">
-                                 {/* Consumables Section */}
-                                 <div>
-                                     <div className="text-[10px] uppercase font-bold text-slate-400 mb-2">Vật Phẩm</div>
-                                     <div className="grid grid-cols-3 gap-2">
-                                         <InventoryItemButton itemId="fertilizer" />
-                                         <InventoryItemButton itemId="revive_potion" />
-                                         <InventoryItemButton itemId="super_water" />
-                                     </div>
-                                 </div>
-
-                                 {/* Sprinklers Section */}
-                                 <div>
-                                     <div className="text-[10px] uppercase font-bold text-slate-400 mb-2">Vòi Tưới</div>
-                                     <div className="grid grid-cols-3 gap-2">
-                                         <InventoryItemButton itemId="sprinkler_basic" />
-                                         <InventoryItemButton itemId="sprinkler_advanced" />
-                                         <InventoryItemButton itemId="sprinkler_pro" />
-                                     </div>
-                                 </div>
-
-                                 {/* Toys Section */}
-                                 <div>
-                                     <div className="text-[10px] uppercase font-bold text-slate-400 mb-2">Đồ Chơi Pet</div>
-                                     <div className="grid grid-cols-3 gap-2">
-                                         <InventoryItemButton itemId="toy_ball" />
-                                         <InventoryItemButton itemId="toy_yarn" />
-                                         <InventoryItemButton itemId="toy_whistle" />
-                                     </div>
-                                     {!equippedPet && (
-                                         <div className="text-[10px] text-red-400 italic mt-1 text-center">Cần trang bị Pet để dùng đồ chơi</div>
-                                     )}
-                                 </div>
-                             </div>
-                        </div>
-                    )}
-
-                    {/* Bottom Dock */}
-                    <div className="pointer-events-auto bg-white/90 backdrop-blur-2xl rounded-3xl p-2 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/50 flex items-center justify-between gap-2 mx-2 md:mx-0">
-                        
-                        {/* Basic Tools (Fixed) */}
-                        <div className="flex-1 flex gap-1 justify-around">
-                            <ToolButton tool="select_seed" icon={Wheat} label="Trồng" color="green" />
-                            <ToolButton tool="water" icon={Droplets} label="Tưới" color="cyan" />
-                            <ToolButton tool="harvest" icon={ShoppingBasket} label="Thu" color="orange" />
-                            <ToolButton tool="shovel" icon={Shovel} label="Xẻng" color="stone" />
-                        </div>
-
-                        {/* Divider */}
-                        <div className="w-[1px] h-10 bg-slate-200"></div>
-
-                        {/* Inventory Toggle Button */}
-                        <button 
-                            onClick={() => setIsInventoryOpen(!isInventoryOpen)}
-                            className={`
-                                flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all shadow-sm
-                                ${isInventoryOpen ? 'bg-slate-100' : 'bg-indigo-50 hover:bg-indigo-100'}
-                                ${!isBasicTool(selectedTool) ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}
-                            `}
-                        >
-                            {isBasicTool(selectedTool) ? (
-                                <>
-                                    <Backpack className="w-6 h-6 text-indigo-600 mb-1" />
-                                    <span className="text-[9px] font-bold text-indigo-700 uppercase">Túi Đồ</span>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="text-2xl mb-1 drop-shadow-sm">{ITEMS[selectedTool as ItemId]?.emoji}</div>
-                                    <span className="text-[8px] font-bold text-slate-700 uppercase truncate w-14 text-center">
-                                        {inventory[selectedTool as ItemId] || 0}
-                                    </span>
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Toast */}
-            {toast && (
-                <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
-                    <div className="bg-slate-900/90 text-white px-6 py-3 rounded-full font-bold shadow-2xl backdrop-blur-md flex items-center gap-2">
-                        <Check className="w-4 h-4 text-green-400" />
-                        {toast.msg}
-                    </div>
-                </div>
-            )}
-
+      {/* Pet Display (Moved to bottom left to balance UI) */}
+      {equippedPet && (
+        <div onClick={handlePetClick} className="cursor-pointer active:scale-95 transition-transform">
             <PetDisplay equippedPet={equippedPet} cooldownTimer={petCooldownTimer} activeTimer={petActiveTimer} />
-            <Assistant money={money} />
-            
-            </div>
-        </>
-    )}
-    </>
+        </div>
+      )}
+
+      {/* AI Assistant (Bottom Right) */}
+      <Assistant money={money} />
+
+      {/* --- OVERLAYS --- */}
+
+      {/* Mobile Shop Drawer */}
+      {isShopOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsShopOpen(false)} />
+              <div className="absolute bottom-0 left-0 right-0 h-[85vh] rounded-t-[2rem] overflow-hidden animate-in slide-in-from-bottom duration-300 z-50">
+                  <div className="h-full bg-[#f1f5f9]">
+                    <div className="absolute top-4 right-4 z-50">
+                        <button onClick={() => setIsShopOpen(false)} className="bg-black/10 p-2 rounded-full"><X className="w-5 h-5"/></button>
+                    </div>
+                    <Shop 
+                      money={money} level={level}
+                      selectedSeedId={selectedSeedId} onSelectSeed={setSelectedSeedId}
+                      onBuyItem={handleBuyItem} onBuyPet={handleBuyPet} ownedPets={ownedPets}
+                      shopStock={shopStock} shopNextRefresh={shopNextRefresh}
+                    />
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* INVENTORY DRAWER */}
+      {isInventoryOpen && (
+          <div className="fixed inset-0 z-50">
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={() => setIsInventoryOpen(false)} />
+              <div className="absolute inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col z-50">
+                  {/* Header */}
+                  <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-indigo-50/50">
+                      <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                          <Backpack className="w-6 h-6 text-indigo-500" />
+                          Balo Của Bạn
+                      </h2>
+                      <button onClick={() => setIsInventoryOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                          <X className="w-6 h-6 text-slate-400" />
+                      </button>
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 overflow-y-auto p-5 scrollbar-hide">
+                      
+                      {/* PETS SECTION */}
+                      <div className="mb-8">
+                          <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                              <Crown className="w-4 h-4" /> Thú Cưng Đã Sở Hữu
+                          </h3>
+                          
+                          {ownedPets.length === 0 ? (
+                              <div className="bg-slate-50 rounded-2xl p-6 text-center text-slate-400 text-sm border-2 border-dashed border-slate-200">
+                                  Bạn chưa có thú cưng nào.<br/>Ghé Cửa Hàng để mua nhé!
+                              </div>
+                          ) : (
+                              <div className="flex flex-col gap-3">
+                                  {ownedPets.map(petId => {
+                                      const pet = PETS[petId];
+                                      if (!pet) return null; // Safety Check
+                                      
+                                      const isEquipped = equippedPet === petId;
+                                      return (
+                                          <div key={petId} className={`
+                                              relative p-3 rounded-2xl border-2 flex items-center gap-4 transition-all
+                                              ${isEquipped ? 'bg-indigo-50 border-indigo-500 shadow-md' : 'bg-white border-slate-100 hover:border-indigo-100'}
+                                          `}>
+                                              <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-3xl shadow-sm border border-slate-100">
+                                                  {pet.emoji}
+                                              </div>
+                                              <div className="flex-1">
+                                                  <div className="font-bold text-slate-800">{pet.name}</div>
+                                                  <div className="text-[10px] text-slate-500 leading-tight">{pet.description}</div>
+                                              </div>
+                                              <button 
+                                                  onClick={() => handleEquipPet(petId)}
+                                                  disabled={isEquipped}
+                                                  className={`
+                                                      px-4 py-2 rounded-xl font-bold text-xs transition-all
+                                                      ${isEquipped 
+                                                          ? 'bg-green-500 text-white cursor-default' 
+                                                          : 'bg-slate-800 text-white hover:bg-indigo-600 active:scale-95 shadow-lg shadow-indigo-500/20'
+                                                      }
+                                                  `}
+                                              >
+                                                  {isEquipped ? 'Đang dùng' : 'Trang bị'}
+                                              </button>
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          )}
+                      </div>
+
+                      {/* ITEMS SECTION */}
+                      <div>
+                          <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                              <Briefcase className="w-4 h-4" /> Vật Phẩm
+                          </h3>
+                          <div className="grid grid-cols-2 gap-3">
+                              {Object.entries(inventory).map(([itemId, count]) => {
+                                  if (count <= 0) return null;
+                                  const item = ITEMS[itemId as ItemId];
+                                  if (!item) return null; // Safety Check
+
+                                  return (
+                                      <button 
+                                          key={itemId}
+                                          onClick={() => {
+                                              if (['fertilizer', 'revive_potion'].includes(itemId)) {
+                                                  setSelectedTool(itemId as ToolType);
+                                                  setIsInventoryOpen(false);
+                                                  showToast(`Đã chọn ${item.name}. Chạm vào cây để dùng.`);
+                                              }
+                                          }}
+                                          className="bg-white border border-slate-100 p-3 rounded-2xl flex flex-col items-center gap-2 shadow-sm hover:shadow-md transition-all active:scale-95"
+                                      >
+                                          <div className="text-3xl">{item.emoji}</div>
+                                          <div className="text-center">
+                                              <div className="font-bold text-xs text-slate-700">{item.name}</div>
+                                              <div className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full mt-1 inline-block">
+                                                  x{count}
+                                              </div>
+                                          </div>
+                                      </button>
+                                  );
+                              })}
+                              
+                              {Object.values(inventory).every(c => c <= 0) && (
+                                  <div className="col-span-2 text-center text-slate-400 text-xs italic py-4">
+                                      Balo trống rỗng...
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Popups */}
+      {toast && (
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-slate-800/90 text-white px-6 py-3 rounded-2xl shadow-xl z-[100] animate-in fade-in slide-in-from-top-4 backdrop-blur-md flex items-center gap-3 pointer-events-none">
+              <Info className="w-5 h-5 text-indigo-400" />
+              <span className="font-bold text-sm">{toast.msg}</span>
+          </div>
+      )}
+      
+      {showNameInput && <NameInputScreen onSubmit={(name) => { setPlayerName(name); setShowNameInput(false); setIsLoading(true); }} />}
+      {isLoading && <LoadingScreen onFinished={() => { setIsLoading(false); }} />}
+      {showLeaderboard && <LeaderboardScreen currentPlayer={{ name: playerName, money, level }} rivals={rivals} onClose={() => setShowLeaderboard(false)} />}
+      {showDailyReward && <DailyRewardPopup currentStreak={consecutiveDays} onClaim={() => {
+          const reward = DAILY_REWARDS[Math.min(consecutiveDays, 7) - 1];
+          if (reward.type === 'money') setMoney(m => m + (reward.value as number));
+          else if (reward.type === 'item') setInventory(i => ({...i, [reward.value as string]: (i[reward.value as string] || 0) + reward.count}));
+          setLastClaimedDate(Date.now());
+          setShowDailyReward(false);
+          showToast(`Đã nhận quà ngày ${consecutiveDays}!`);
+      }} />}
+    </div>
   );
 };
 

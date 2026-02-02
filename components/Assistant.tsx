@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, X, Bot, Loader2 } from 'lucide-react';
 import { askGardeningExpert } from '../services/geminiService';
@@ -41,6 +42,7 @@ const Assistant: React.FC<AssistantProps> = ({ money }) => {
     return (
       <button
         onClick={() => setIsOpen(true)}
+        // Adjusted to bottom-24 to align with Pet Display and avoid bottom toolbar
         className="fixed bottom-24 right-4 bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-xl shadow-indigo-600/30 transition-all hover:scale-110 z-50 flex items-center gap-2"
       >
         <Bot className="w-6 h-6" />

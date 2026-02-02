@@ -4,6 +4,7 @@ import { PlantType, Rarity, PlantCategory, WeatherType, VariantType, ItemType, I
 export const GRID_SIZE = 12; 
 export const TICK_RATE = 1000; 
 export const SHOP_REFRESH_RATE = 4 * 60 * 1000; // 4 minutes
+export const SAVE_VERSION = 1.1; // Increment this when making breaking changes to save structure
 
 // --- Daily Rewards Configuration ---
 export const DAILY_REWARDS: DailyReward[] = [
@@ -149,8 +150,8 @@ export const PETS: Record<PetId, PetType> = {
   },
   bee: {
     id: 'bee', name: 'Ong Thợ', emoji: '🐝', price: 15000, 
-    baseCooldown: 540, activeDuration: 45, // CD: 9 phút
-    description: 'Thụ phấn giúp cây lớn nhanh mỗi giây (45s).',
+    baseCooldown: 540, activeDuration: 60, // CD: 9 phút, Active: 60s
+    description: 'Thụ phấn giúp cây lớn nhanh mỗi giây (60s).',
     abilityType: 'grow_plants', abilityValue: 5 // Per second %
   },
   cloud_spirit: {

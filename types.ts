@@ -149,6 +149,9 @@ export interface GameState {
   consecutiveDays: number; // Current streak (1-7)
   lastClaimedDate: number; // Timestamp of last claim
   lastSaveTime: number; // Timestamp of last save (for offline progress)
+  
+  // Migration
+  version?: number;
 }
 
 export interface ChatMessage {
