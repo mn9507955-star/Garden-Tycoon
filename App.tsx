@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { CellData, ToolType, WeatherType, VariantType, ItemId, PetId, Rival, DailyReward, GameState } from './types';
 import { GRID_SIZE, INITIAL_MONEY, PLANTS, TICK_RATE, WEATHER_EFFECTS, VARIANTS, ITEMS, PETS, SHOP_REFRESH_RATE, DAILY_REWARDS, SAVE_VERSION } from './constants';
@@ -12,7 +11,7 @@ import MainMenu from './components/MainMenu';
 import NameInputScreen from './components/NameInputScreen';
 import LeaderboardScreen from './components/LeaderboardScreen';
 import DailyRewardPopup from './components/DailyRewardPopup';
-import { Droplets, Shovel, ShoppingBasket, Coins, Wheat, Zap, HeartPulse, Crown, Star, Bone, Club, Annoyed, ShowerHead, User, Volume2, VolumeX, Music, Check, Menu, X, Backpack, ChevronDown, Store, RefreshCw, Briefcase, Info } from 'lucide-react';
+import { Droplets, ShoppingBasket, Coins, Crown, Volume2, VolumeX, X, Backpack, Store, Briefcase, Info, Zap } from 'lucide-react';
 
 const SAVE_KEY = 'GARDEN_TYCOON_SAVE_LOCAL_PLAYER';
 const RIVALS_SAVE_KEY = 'GARDEN_TYCOON_RIVALS_V2'; 
@@ -30,7 +29,7 @@ const PLAYLIST = [
   { name: "Garden Ambience", url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3" }
 ];
 
-const App: React.FC = () => {
+export const App: React.FC = () => {
   // --- UI Flow State ---
   const [inMenu, setInMenu] = useState(true);
   const [showNameInput, setShowNameInput] = useState(false);
@@ -100,10 +99,7 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // --- Data Loading Logic (Robuster Version) ---
-  useEffect(() => { loadGameData(); loadRivalsData(); }, []);
-
-  // --- MUSIC LOGIC ---
+  // --- AUDIO LOGIC ---
   useEffect(() => {
     const audio = audioRef.current;
     if (audio) {
@@ -115,17 +111,6 @@ const App: React.FC = () => {
   }, [currentSongIndex, isMuted]);
 
   // --- RIVAL SYSTEM LOGIC ---
-  const loadRivalsData = () => {
-    try {
-        const savedRivalsStr = localStorage.getItem(RIVALS_SAVE_KEY);
-        if (savedRivalsStr) {
-            setRivals(JSON.parse(savedRivalsStr));
-        } else {
-            generateInitialRivals();
-        }
-    } catch (e) { generateInitialRivals(); }
-  };
-
   const generateInitialRivals = () => {
       const newRivals: Rival[] = [];
       for (let i = 0; i < 20; i++) {
@@ -137,6 +122,19 @@ const App: React.FC = () => {
       }
       setRivals(newRivals);
       localStorage.setItem(RIVALS_SAVE_KEY, JSON.stringify(newRivals));
+  };
+
+  const loadRivalsData = () => {
+    try {
+        const savedRivalsStr = localStorage.getItem(RIVALS_SAVE_KEY);
+        if (savedRivalsStr) {
+            setRivals(JSON.parse(savedRivalsStr));
+        } else {
+            generateInitialRivals();
+        }
+    } catch (e) { 
+        generateInitialRivals(); 
+    }
   };
 
   // --- SHOP REFRESH LOGIC (BALANCED) ---
@@ -185,6 +183,7 @@ const App: React.FC = () => {
       setShopNextRefresh(Date.now() + SHOP_REFRESH_RATE);
   };
 
+  // --- DATA LOADING LOGIC ---
   const loadGameData = () => {
       try {
           const savedStr = localStorage.getItem(SAVE_KEY);
@@ -247,10 +246,15 @@ const App: React.FC = () => {
       }
   };
 
+  // --- INITIAL EFFECT ---
+  useEffect(() => { 
+    loadGameData(); 
+    loadRivalsData(); 
+  }, []);
+
   // --- SAVE LOGIC ---
   useEffect(() => {
     if (!inMenu && !isLoading && playerName) {
-        // Debounce or just save. For simplicity here we save, but wrapped in try-catch
         try {
             const stateToSave = {
                 playerName, money, level, xp, inventory, grid, weather,
@@ -299,14 +303,26 @@ const App: React.FC = () => {
          }
       }
 
-      // 2. Pet Timers
+      // 2. Pet Timers & AUTO-ACTIVATION LOOP
       if (petActiveTimer > 0) {
           setPetActiveTimer(prev => prev - 1);
       } else if (petCooldownTimer > 0) {
           setPetCooldownTimer(prev => prev - 1);
+      } else if (equippedPet && PETS[equippedPet]) {
+          // If both timers are 0, restart the cycle automatically
+          const pet = PETS[equippedPet];
+          setPetActiveTimer(pet.activeDuration);
+          setPetCooldownTimer(pet.baseCooldown);
+          
+          // Instant Effects (Weather) - triggers once when cycle restarts
+          if (pet.abilityType === 'summon_weather') {
+              setWeather(pet.abilityValue as WeatherType);
+              setWeatherTimeLeft(pet.activeDuration + 10);
+              showToast(`${pet.name} đã gọi ${WEATHER_EFFECTS[pet.abilityValue as WeatherType].desc}!`);
+          }
       }
 
-      // 3. Auto Activate Pet Ability
+      // 3. Apply Active Pet Effects (Per Tick)
       if (equippedPet && PETS[equippedPet] && petActiveTimer > 0) {
           const pet = PETS[equippedPet];
           if (pet.abilityType === 'buff_money') {
@@ -377,7 +393,7 @@ const App: React.FC = () => {
     }, TICK_RATE);
 
     return () => clearInterval(tick);
-  }, [inMenu, isLoading, weather, petActiveTimer, equippedPet, sprinklerEndTime, shopNextRefresh]);
+  }, [inMenu, isLoading, weather, petActiveTimer, petCooldownTimer, equippedPet, sprinklerEndTime, shopNextRefresh]);
 
   // --- HANDLERS ---
   const handleCellClick = (id: number) => {
@@ -442,8 +458,22 @@ const App: React.FC = () => {
             const plant = PLANTS[selectedSeedId];
             if (!plant) return newGrid; // Safety check
 
+            // STOCK CHECK LOGIC
+            const currentStock = shopStock[selectedSeedId] || 0;
+            if (currentStock <= 0) {
+                showToast("Hết hạt giống này rồi! Chờ nhập kho.");
+                return newGrid;
+            }
+
             if (money >= plant.buyPrice) {
                 setMoney(m => m - plant.buyPrice);
+                
+                // Deduct stock
+                setShopStock(prev => ({
+                    ...prev,
+                    [selectedSeedId]: Math.max(0, (prev[selectedSeedId] || 0) - 1)
+                }));
+
                 cell.plantId = selectedSeedId;
                 cell.growthProgress = 0;
                 cell.waterLevel = 50;
@@ -553,8 +583,8 @@ const App: React.FC = () => {
       {/* Background Ambience */}
       <audio ref={audioRef} src={PLAYLIST[currentSongIndex].url} loop hidden />
       
-      {/* HUD: Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-4 z-30 flex justify-between items-start pointer-events-none">
+      {/* HUD: Top Bar - Z-Index 60 for better access */}
+      <div className="absolute top-0 left-0 right-0 p-4 z-[60] flex justify-between items-start pointer-events-none">
           {/* User Info */}
           <div className="pointer-events-auto flex flex-col gap-2">
               <div className="bg-white/80 backdrop-blur-md p-2 rounded-2xl shadow-md border border-white flex items-center gap-3 pr-4">
@@ -584,19 +614,19 @@ const App: React.FC = () => {
               <div className="flex gap-2">
                   <button 
                     onClick={() => setIsInventoryOpen(true)}
-                    className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-white hover:bg-indigo-50 transition-colors"
+                    className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-white hover:bg-indigo-50 transition-colors cursor-pointer active:scale-95 touch-manipulation"
                   >
                       <Briefcase className="w-5 h-5 text-slate-600" />
                   </button>
                   <button 
                     onClick={() => setShowLeaderboard(true)}
-                    className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-white hover:bg-yellow-50 transition-colors"
+                    className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-white hover:bg-yellow-50 transition-colors cursor-pointer active:scale-95 touch-manipulation"
                   >
                       <Crown className="w-5 h-5 text-yellow-600" />
                   </button>
                   <button 
                     onClick={() => setIsMuted(!isMuted)}
-                    className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-white hover:bg-slate-50 transition-colors"
+                    className="w-10 h-10 bg-white rounded-xl shadow-md flex items-center justify-center border border-white hover:bg-slate-50 transition-colors cursor-pointer active:scale-95 touch-manipulation"
                   >
                       {isMuted ? <VolumeX className="w-5 h-5 text-slate-400" /> : <Volume2 className="w-5 h-5 text-slate-600" />}
                   </button>
@@ -608,11 +638,6 @@ const App: React.FC = () => {
       <div className="absolute inset-0 flex flex-col md:flex-row pt-24 gap-6 z-10 overflow-hidden">
           
           {/* Garden Grid - Centered */}
-          {/* CRITICAL UI FIX: Mobile Layout adjustments 
-              - justify-start: starts grid from top (prevents overlapping bottom bar on small screens)
-              - pb-64: Huge bottom padding ensures the last row is never hidden behind the dock
-              - pt-4: Top padding for breathing room
-          */}
           <div className="flex-1 flex flex-col items-center justify-start md:justify-center h-full overflow-y-auto scrollbar-hide pt-4 md:pt-0 pb-64 md:pb-0">
              <div className="grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 max-w-2xl w-full px-4 shrink-0">
                  {grid.map(cell => (
@@ -627,7 +652,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Desktop Shop Sidebar */}
-          <div className="hidden md:block w-80 h-[85vh] self-center mr-8">
+          <div className="hidden md:block w-80 h-[85vh] self-center mr-8 z-20">
               <Shop 
                   money={money} level={level}
                   selectedSeedId={selectedSeedId} onSelectSeed={setSelectedSeedId}
@@ -637,17 +662,17 @@ const App: React.FC = () => {
           </div>
       </div>
 
-      {/* Bottom Toolbar (Refined Dock Style) */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white/70 backdrop-blur-xl p-2 rounded-full shadow-2xl border border-white/60 flex items-center gap-2 transition-all hover:scale-105 hover:bg-white/80">
+      {/* Bottom Toolbar (Refined Dock Style) - Z-Index 90 for Mobile Access */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[90] bg-white/70 backdrop-blur-xl p-2 rounded-full shadow-2xl border border-white/60 flex items-center gap-2 transition-all hover:scale-105 hover:bg-white/80">
           <button 
             onClick={() => toggleTool('water')}
-            className={`p-3.5 rounded-full transition-all duration-300 ${selectedTool === 'water' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 scale-110' : 'hover:bg-blue-50 text-slate-500'}`}
+            className={`p-3.5 rounded-full transition-all duration-300 cursor-pointer touch-manipulation ${selectedTool === 'water' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 scale-110' : 'hover:bg-blue-50 text-slate-500'}`}
           >
               <Droplets className="w-6 h-6" />
           </button>
           <button 
             onClick={() => toggleTool('harvest')}
-            className={`p-3.5 rounded-full transition-all duration-300 ${selectedTool === 'harvest' ? 'bg-green-500 text-white shadow-lg shadow-green-500/30 scale-110' : 'hover:bg-green-50 text-slate-500'}`}
+            className={`p-3.5 rounded-full transition-all duration-300 cursor-pointer touch-manipulation ${selectedTool === 'harvest' ? 'bg-green-500 text-white shadow-lg shadow-green-500/30 scale-110' : 'hover:bg-green-50 text-slate-500'}`}
           >
               <ShoppingBasket className="w-6 h-6" />
           </button>
@@ -657,7 +682,7 @@ const App: React.FC = () => {
           {/* Quick Item Access (Fertilizer) */}
           <button 
             onClick={() => toggleTool('fertilizer')}
-            className={`p-3.5 rounded-full transition-all duration-300 relative ${selectedTool === 'fertilizer' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30 scale-110' : 'hover:bg-amber-50 text-slate-500'}`}
+            className={`p-3.5 rounded-full transition-all duration-300 relative cursor-pointer touch-manipulation ${selectedTool === 'fertilizer' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30 scale-110' : 'hover:bg-amber-50 text-slate-500'}`}
           >
               <Zap className="w-6 h-6" />
               <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white shadow-sm">
@@ -668,15 +693,15 @@ const App: React.FC = () => {
           {/* Mobile Shop Button */}
           <button 
             onClick={() => setIsShopOpen(true)}
-            className="md:hidden p-3.5 rounded-full bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-600 transition-all ml-1"
+            className="md:hidden p-3.5 rounded-full bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-600 transition-all ml-1 cursor-pointer touch-manipulation"
           >
               <Store className="w-6 h-6" />
           </button>
       </div>
 
-      {/* Pet Display (Moved to bottom left to balance UI) */}
+      {/* Pet Display (Moved to bottom left) */}
       {equippedPet && (
-        <div onClick={handlePetClick} className="cursor-pointer active:scale-95 transition-transform">
+        <div onClick={handlePetClick} className="cursor-pointer active:scale-95 transition-transform z-40">
             <PetDisplay equippedPet={equippedPet} cooldownTimer={petCooldownTimer} activeTimer={petActiveTimer} />
         </div>
       )}
@@ -686,14 +711,20 @@ const App: React.FC = () => {
 
       {/* --- OVERLAYS --- */}
 
-      {/* Mobile Shop Drawer */}
+      {/* Mobile Shop Drawer - Z-Index 100 */}
       {isShopOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
+          <div className="fixed inset-0 z-[100] md:hidden">
               <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsShopOpen(false)} />
               <div className="absolute bottom-0 left-0 right-0 h-[85vh] rounded-t-[2rem] overflow-hidden animate-in slide-in-from-bottom duration-300 z-50">
-                  <div className="h-full bg-[#f1f5f9]">
-                    <div className="absolute top-4 right-4 z-50">
-                        <button onClick={() => setIsShopOpen(false)} className="bg-black/10 p-2 rounded-full"><X className="w-5 h-5"/></button>
+                  <div className="h-full bg-[#f1f5f9] relative">
+                    {/* Fixed absolute close button for mobile shop */}
+                    <div className="absolute top-4 right-4 z-[110]">
+                        <button 
+                            onClick={() => setIsShopOpen(false)} 
+                            className="bg-white text-slate-800 p-2.5 rounded-full shadow-lg border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+                        >
+                            <X className="w-6 h-6"/>
+                        </button>
                     </div>
                     <Shop 
                       money={money} level={level}
@@ -706,23 +737,22 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {/* INVENTORY DRAWER */}
-      {/* 
-          CRITICAL FIX: Changed z-50 to z-[90] to ensure it overlays the Bottom Bar (z-40), Shop (z-50) and Assistant (z-50).
-          Also changed inset-y-0 to h-[100dvh] for mobile browser address bar safety.
-      */}
+      {/* INVENTORY DRAWER - Z-Index 100 */}
       {isInventoryOpen && (
-          <div className="fixed inset-0 z-[90]">
+          <div className="fixed inset-0 z-[100]">
               <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={() => setIsInventoryOpen(false)} />
               <div className="absolute top-0 right-0 bottom-0 w-full max-w-md h-[100dvh] bg-white shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col z-50">
-                  {/* Header */}
-                  <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-indigo-50/50">
-                      <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                          <Backpack className="w-6 h-6 text-indigo-500" />
-                          Balo Của Bạn
+                  {/* Header (Sticky & Padded) */}
+                  <div className="flex items-center justify-between pl-5 pr-4 py-4 pt-14 md:pt-4 border-b border-slate-100 bg-white/95 backdrop-blur-md sticky top-0 z-10">
+                      <h2 className="text-xl font-black text-slate-800 flex items-center gap-2 min-w-0 pr-4">
+                          <Backpack className="w-6 h-6 text-indigo-500 shrink-0" />
+                          <span className="truncate">Balo Của Bạn</span>
                       </h2>
-                      <button onClick={() => setIsInventoryOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                          <X className="w-6 h-6 text-slate-400" />
+                      <button 
+                        onClick={() => setIsInventoryOpen(false)} 
+                        className="p-2.5 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors shrink-0 shadow-sm border border-slate-200"
+                      >
+                          <X className="w-5 h-5 text-slate-600" />
                       </button>
                   </div>
 
@@ -751,18 +781,18 @@ const App: React.FC = () => {
                                               relative p-3 rounded-2xl border-2 flex items-center gap-4 transition-all
                                               ${isEquipped ? 'bg-indigo-50 border-indigo-500 shadow-md' : 'bg-white border-slate-100 hover:border-indigo-100'}
                                           `}>
-                                              <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-3xl shadow-sm border border-slate-100">
+                                              <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center text-3xl shadow-sm border border-slate-100 shrink-0">
                                                   {pet.emoji}
                                               </div>
-                                              <div className="flex-1">
-                                                  <div className="font-bold text-slate-800">{pet.name}</div>
-                                                  <div className="text-[10px] text-slate-500 leading-tight">{pet.description}</div>
+                                              <div className="flex-1 min-w-0">
+                                                  <div className="font-bold text-slate-800 truncate">{pet.name}</div>
+                                                  <div className="text-[10px] text-slate-500 leading-tight line-clamp-2">{pet.description}</div>
                                               </div>
                                               <button 
                                                   onClick={() => handleEquipPet(petId)}
                                                   disabled={isEquipped}
                                                   className={`
-                                                      px-4 py-2 rounded-xl font-bold text-xs transition-all
+                                                      px-4 py-2 rounded-xl font-bold text-xs transition-all shrink-0
                                                       ${isEquipped 
                                                           ? 'bg-green-500 text-white cursor-default' 
                                                           : 'bg-slate-800 text-white hover:bg-indigo-600 active:scale-95 shadow-lg shadow-indigo-500/20'
@@ -785,7 +815,9 @@ const App: React.FC = () => {
                           </h3>
                           <div className="grid grid-cols-2 gap-3">
                               {Object.entries(inventory).map(([itemId, count]) => {
-                                  if (count <= 0) return null;
+                                  // Fix implicit type error for count comparison
+                                  const amount = count as number;
+                                  if (amount <= 0) return null;
                                   const item = ITEMS[itemId as ItemId];
                                   if (!item) return null; // Safety Check
 
@@ -803,16 +835,16 @@ const App: React.FC = () => {
                                       >
                                           <div className="text-3xl">{item.emoji}</div>
                                           <div className="text-center">
-                                              <div className="font-bold text-xs text-slate-700">{item.name}</div>
+                                              <div className="font-bold text-xs text-slate-700 truncate max-w-full">{item.name}</div>
                                               <div className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full mt-1 inline-block">
-                                                  x{count}
+                                                  x{amount}
                                               </div>
                                           </div>
                                       </button>
                                   );
                               })}
                               
-                              {Object.values(inventory).every(c => c <= 0) && (
+                              {(Object.values(inventory) as number[]).every(c => c <= 0) && (
                                   <div className="col-span-2 text-center text-slate-400 text-xs italic py-4">
                                       Balo trống rỗng...
                                   </div>
@@ -846,5 +878,3 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-export default App;

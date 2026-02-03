@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { PLANTS, ITEMS, PETS } from '../constants';
 import { PlantType, PlantCategory, ItemId, PetId } from '../types';
@@ -44,8 +43,8 @@ const Shop: React.FC<ShopProps> = ({
 
   return (
     <div className="bg-white/60 backdrop-blur-xl xl:rounded-[2rem] flex flex-col h-full shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] border border-white/60 overflow-hidden ring-1 ring-white/80">
-      {/* Header with right padding for mobile Close button */}
-      <div className="p-5 pr-14 md:pr-5 border-b border-white/20 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
+      {/* Header with improved padding for mobile close button (pt-16) */}
+      <div className="p-5 pt-16 md:pt-5 pr-5 border-b border-white/20 bg-gradient-to-r from-indigo-50/50 to-purple-50/50">
         <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-black text-slate-800 flex items-center gap-2 tracking-tight">
             <span className="text-2xl drop-shadow-md">🏪</span> 
